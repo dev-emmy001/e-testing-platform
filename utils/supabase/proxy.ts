@@ -1,5 +1,6 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { resolveCurrentUserRole } from "@/utils/auth/profile";
 import {
   getSupabasePublishableKey,
   getSupabaseUrl,
@@ -38,17 +39,7 @@ export async function getProxySessionContext(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  let role: string | null = null;
-
-  if (user) {
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .maybeSingle<{ role: string }>();
-
-    role = profile?.role ?? null;
-  }
+  const role = user ? await resolveCurrentUserRole(supabase, user) : null;
 
   return {
     response: supabaseResponse,

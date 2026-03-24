@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { FlashBanner } from "@/components/flash-banner";
 import { SubmitButton } from "@/components/submit-button";
 import {
@@ -18,6 +19,7 @@ type HomePageProps = {
   searchParams: Promise<{
     error?: string | string[];
     message?: string | string[];
+    view?: string | string[];
   }>;
 };
 
@@ -25,6 +27,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   const params = await searchParams;
   const error = getSearchParamValue(params.error);
   const message = getSearchParamValue(params.message);
+  const view = getSearchParamValue(params.view);
   const { profile, supabase, user } = await getCurrentUserContext();
 
   if (!user) {
@@ -106,6 +109,10 @@ export default async function HomePage({ searchParams }: HomePageProps) {
         </div>
       </main>
     );
+  }
+
+  if (profile?.role === "admin" && view !== "trainee") {
+    redirect("/admin");
   }
 
   const [{ data: activeTests }, { data: sessions }] = await Promise.all([

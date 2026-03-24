@@ -8,6 +8,23 @@ type SignInFormProps = {
   nextPath?: string | null;
 };
 
+function getAuthErrorMessage(message: string) {
+  const normalizedMessage = message.toLowerCase();
+
+  if (normalizedMessage.includes("error sending confirmation email")) {
+    return "Supabase could not send the magic link email. Check Authentication > Email Templates and SMTP Settings in Supabase, then retry.";
+  }
+
+  if (
+    normalizedMessage.includes("redirect_to") ||
+    normalizedMessage.includes("redirect url")
+  ) {
+    return "This redirect URL is not allowed by Supabase. Add your app URL ending in /auth/callback under Authentication > URL Configuration > Redirect URLs.";
+  }
+
+  return message;
+}
+
 export function SignInForm({ nextPath }: SignInFormProps) {
   const supabaseRef = useRef<ReturnType<typeof createClient> | null>(null);
   const [email, setEmail] = useState("");
@@ -41,7 +58,7 @@ export function SignInForm({ nextPath }: SignInFormProps) {
         });
 
         if (authError) {
-          setError(authError.message);
+          setError(getAuthErrorMessage(authError.message));
           return;
         }
 

@@ -1,16 +1,17 @@
 import type { User } from "@supabase/supabase-js";
 import { redirect } from "next/navigation";
+import {
+  resolveCurrentUserProfile,
+  type ProfileRecord,
+} from "@/utils/auth/profile";
+import { createAdminClient } from "@/utils/supabase/admin";
 import { createClient } from "@/utils/supabase/server";
 
-export type ProfileRecord = {
-  id: string;
-  email: string;
-  role: string;
-  created_at: string | null;
-};
+type ServerSupabaseClient = Awaited<ReturnType<typeof createClient>>;
+type AdminSupabaseClient = ReturnType<typeof createAdminClient>;
 
 type UserContext = {
-  supabase: Awaited<ReturnType<typeof createClient>>;
+  supabase: ServerSupabaseClient;
   user: User | null;
   profile: ProfileRecord | null;
 };
@@ -19,7 +20,9 @@ type AuthenticatedUserContext = UserContext & {
   user: User;
 };
 
-type AdminUserContext = AuthenticatedUserContext & {
+type AdminUserContext = {
+  supabase: AdminSupabaseClient;
+  user: User;
   profile: ProfileRecord;
 };
 
@@ -37,16 +40,12 @@ export async function getCurrentUserContext(): Promise<UserContext> {
     };
   }
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("id, email, role, created_at")
-    .eq("id", user.id)
-    .maybeSingle<ProfileRecord>();
+  const profile = await resolveCurrentUserProfile(supabase, user);
 
   return {
     supabase,
     user,
-    profile: profile ?? null,
+    profile,
   };
 }
 
@@ -67,5 +66,9 @@ export async function requireAdminContext(nextPath = "/admin"): Promise<AdminUse
     redirect("/");
   }
 
-  return context as AdminUserContext;
+  return {
+    supabase: createAdminClient(),
+    user: context.user,
+    profile: context.profile,
+  };
 }

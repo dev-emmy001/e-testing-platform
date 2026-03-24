@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { resolveCurrentUserRole } from "@/utils/auth/profile";
 import { createClient } from "@/utils/supabase/server";
 import { createAdminClient } from "@/utils/supabase/admin";
 
@@ -48,13 +49,9 @@ export async function GET(request: NextRequest, { params }: ExportRouteProps) {
     return NextResponse.redirect(new URL("/sign-in", request.url));
   }
 
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("role")
-    .eq("id", user.id)
-    .maybeSingle<{ role: string }>();
+  const role = await resolveCurrentUserRole(supabase, user);
 
-  if (profile?.role !== "admin") {
+  if (role !== "admin") {
     return NextResponse.redirect(new URL("/", request.url));
   }
 
