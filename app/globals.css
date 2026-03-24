@@ -16,14 +16,8 @@
   --color-gray-300: #c4c4d8;
   --color-gray-100: #f4f4fa;
   --color-white: #ffffff;
-  --font-display:
-    "Nunito", "Avenir Next", "Segoe UI Rounded", "Trebuchet MS", ui-rounded,
-    system-ui, sans-serif;
-  --font-body:
-    "DM Sans", "Segoe UI", "Helvetica Neue", system-ui, sans-serif;
   --font-code:
-    "JetBrains Mono", "SFMono-Regular", ui-monospace, "Cascadia Code",
-    monospace;
+    "JetBrains Mono", "SFMono-Regular", ui-monospace, "Cascadia Code", monospace;
 }
 
 @theme inline {
@@ -37,8 +31,14 @@ body {
   background: var(--background);
   background-image:
     radial-gradient(circle at top left, rgb(61 58 142 / 0.12), transparent 28%),
-    radial-gradient(circle at right 20%, rgb(41 171 226 / 0.1), transparent 24%),
+    radial-gradient(
+      circle at right 20%,
+      rgb(41 171 226 / 0.1),
+      transparent 24%
+    ),
     linear-gradient(180deg, #ffffff 0%, #f7f7fc 48%, #eef2fb 100%);
+  background-size: cover;
+  background-repeat: no-repeat;
   color: var(--foreground);
   font-family: var(--font-body);
 }
@@ -52,7 +52,8 @@ h2,
 h3,
 h4,
 h5,
-h6 {
+h6,
+.font-display {
   font-family: var(--font-display);
 }
 

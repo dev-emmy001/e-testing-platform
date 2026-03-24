@@ -303,7 +303,7 @@ export default async function AdminOverviewPage() {
             <p className="text-sm font-semibold uppercase tracking-[0.18em] text-white/70">
               Live snapshot
             </p>
-            <p className="mt-3 text-4xl font-extrabold">
+            <p className="mt-3 text-4xl font-display">
               {liveSessions.length ? liveSessions.length : "No"} live attempts
             </p>
             <p className="mt-3 text-sm leading-7 text-white/80">
@@ -340,7 +340,7 @@ export default async function AdminOverviewPage() {
               <p className="text-sm font-semibold text-gray-500">
                 {card.label}
               </p>
-              <p className={`mt-3 text-4xl font-extrabold ${card.tone}`}>
+              <p className={`mt-3 text-4xl font-display ${card.tone}`}>
                 {typeof card.value === "number"
                   ? formatCompactNumber(card.value)
                   : card.value}

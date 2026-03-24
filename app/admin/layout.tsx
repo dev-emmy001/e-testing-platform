@@ -43,17 +43,10 @@ export default async function AdminLayout({
   return (
     <div className="min-h-screen px-4 py-4 sm:px-6 lg:px-8">
       <div className="mx-auto grid min-h-[calc(100vh-2rem)] max-w-7xl gap-4 lg:grid-cols-[280px_1fr]">
-        <aside className="surface-card rounded-4xl p-6 lg:sticky lg:top-4 lg:h-[calc(100vh-2rem)]">
+        <aside className="surface-card rounded-4xl p-6 lg:sticky lg:top-4 h-max">
           <div className="rounded-[1.75rem] bg-[linear-gradient(160deg,rgba(61,58,142,1),rgba(41,171,226,0.88))] px-5 py-5 text-white shadow-[0_20px_40px_rgba(42,40,101,0.18)]">
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-white/70">
-              Admin console
-            </p>
-            <h1 className="mt-3 text-3xl font-bold">ighub Testing</h1>
+            <h1 className="text-xl uppercase font-bold">Admin console</h1>
             <p className="mt-2 text-sm text-white/80">{profile.email}</p>
-            <p className="mt-4 text-sm leading-6 text-white/75">
-              Secure workspace for assessment operations, publishing, and
-              reporting.
-            </p>
           </div>
 
           <AdminSidebarNav items={navItems} />

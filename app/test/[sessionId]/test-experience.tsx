@@ -29,15 +29,18 @@ export function TestExperience({
     Object.fromEntries(
       questions
         .filter((question) => question.selectedAnswer)
-        .map((question) => [question.questionId, question.selectedAnswer as string]),
+        .map((question) => [
+          question.questionId,
+          question.selectedAnswer as string,
+        ]),
     ),
   );
   const [remainingMs, setRemainingMs] = useState(
     new Date(expiresAt).getTime() - Date.now(),
   );
-  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">(
-    "idle",
-  );
+  const [saveState, setSaveState] = useState<
+    "idle" | "saving" | "saved" | "error"
+  >("idle");
 
   async function persistAnswer(questionId: string, selectedAnswer: string) {
     setSaveState("saving");
@@ -108,23 +111,23 @@ export function TestExperience({
 
   return (
     <div className="space-y-6">
-      <section className="surface-card rounded-[2rem] p-6 lg:p-8">
+      <section className="surface-card rounded-4xl p-6 lg:p-8">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[color:var(--color-purple)]">
+            <p className="text-sm font-semibold uppercase tracking-[0.18em] text-(--color-purple)">
               In progress
             </p>
-            <h2 className="mt-2 text-3xl font-bold text-[color:var(--color-gray-900)]">
+            <h2 className="mt-2 text-3xl font-bold text-gray-900">
               {testTitle}
             </h2>
-            <p className="mt-2 text-sm text-[color:var(--color-gray-700)]">
-              Answers save as you click them. Submission is automatic when the timer hits
-              zero.
+            <p className="mt-2 text-sm text-gray-700">
+              Answers save as you click them. Submission is automatic when the
+              timer hits zero.
             </p>
           </div>
 
-          <div className="rounded-[1.75rem] bg-[color:var(--color-gray-100)] px-6 py-4 text-center">
-            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[color:var(--color-gray-500)]">
+          <div className="rounded-[1.75rem] bg-gray-100 px-6 py-4 text-center">
+            <p className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-500">
               Time left
             </p>
             <p
@@ -137,21 +140,21 @@ export function TestExperience({
 
         <div className="mt-6 grid gap-4 lg:grid-cols-[1fr_auto] lg:items-end">
           <div>
-            <div className="mb-2 flex items-center justify-between text-sm font-semibold text-[color:var(--color-gray-700)]">
+            <div className="mb-2 flex items-center justify-between text-sm font-semibold text-gray-700">
               <span>Progress</span>
               <span>
                 {answeredCount}/{questions.length} answered
               </span>
             </div>
-            <div className="h-3 rounded-full bg-[color:var(--color-gray-100)]">
+            <div className="h-3 rounded-full bg-gray-100">
               <div
-                className="h-3 rounded-full bg-[color:var(--color-indigo)] transition-all"
+                className="h-3 rounded-full bg-(--color-indigo) transition-all"
                 style={{ width: `${progressPercent}%` }}
               />
             </div>
           </div>
 
-          <p className="text-sm text-[color:var(--color-gray-600)]">
+          <p className="text-sm text-gray-600">
             {saveState === "saving"
               ? "Saving latest answer..."
               : saveState === "saved"
@@ -173,7 +176,10 @@ export function TestExperience({
         }}
       >
         {questions.map((question) => (
-          <section key={question.questionId} className="surface-card rounded-[2rem] p-6">
+          <section
+            key={question.questionId}
+            className="surface-card rounded-4xl p-6"
+          >
             <input
               type="hidden"
               name={`answer:${question.questionId}`}
@@ -184,16 +190,18 @@ export function TestExperience({
             <div className="flex flex-col gap-4">
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[color:var(--color-purple)]">
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-(--color-purple)">
                     Question {question.position}
                   </p>
-                  <h3 className="mt-2 text-xl font-bold text-[color:var(--color-gray-900)]">
+                  <h3 className="mt-2 text-xl font-bold text-gray-900">
                     {question.questionText}
                   </h3>
                 </div>
 
-                <span className="status-pill bg-[color:var(--color-indigo-light)] text-[color:var(--color-indigo)]">
-                  {question.type === "true_false" ? "True / False" : "Multiple choice"}
+                <span className="status-pill bg-(--color-indigo-light) text-(--color-indigo)">
+                  {question.type === "true_false"
+                    ? "True / False"
+                    : "Multiple choice"}
                 </span>
               </div>
 
@@ -206,8 +214,8 @@ export function TestExperience({
                       key={option}
                       className={`flex cursor-pointer items-start gap-3 rounded-3xl border px-4 py-4 transition ${
                         checked
-                          ? "border-[color:var(--color-indigo)] bg-[color:var(--color-indigo-light)]"
-                          : "border-[color:var(--color-gray-300)] bg-white"
+                          ? "border-(--color-indigo) bg-(--color-indigo-light)"
+                          : "border-gray-300 bg-white"
                       }`}
                     >
                       <input
@@ -215,10 +223,12 @@ export function TestExperience({
                         name={`choice-${question.questionId}`}
                         value={option}
                         checked={checked}
-                        onChange={() => handleAnswerChange(question.questionId, option)}
-                        className="mt-1 h-4 w-4 accent-[color:var(--color-indigo)]"
+                        onChange={() =>
+                          handleAnswerChange(question.questionId, option)
+                        }
+                        className="mt-1 h-4 w-4 accent-(--color-indigo)"
                       />
-                      <span className="text-sm leading-7 text-[color:var(--color-gray-900)]">
+                      <span className="text-sm leading-7 text-gray-900">
                         {option}
                       </span>
                     </label>

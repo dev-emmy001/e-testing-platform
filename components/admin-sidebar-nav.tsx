@@ -33,10 +33,10 @@ export function AdminSidebarNav({ items }: AdminSidebarNavProps) {
           <Link
             key={item.href}
             href={item.href}
-            className={`block rounded-[1.5rem] border px-4 py-4 transition ${
+            className={`block rounded-3xl border px-4 py-4 transition ${
               isActive
-                ? "border-[color:var(--color-indigo)] bg-[color:var(--color-indigo-light)] text-[color:var(--color-indigo)]"
-                : "border-transparent text-[color:var(--color-gray-700)] hover:border-[color:var(--color-gray-300)] hover:bg-[color:var(--color-indigo-light)]/60 hover:text-[color:var(--color-indigo)]"
+                ? "border-(--color-indigo) bg-(--color-indigo-light) text-(--color-indigo)"
+                : "border-transparent text-gray-700 hover:border-gray-300 hover:bg-(--color-indigo-light)/60 hover:text-(--color-indigo)"
             }`}
           >
             <div className="flex items-start justify-between gap-3">
@@ -44,17 +44,12 @@ export function AdminSidebarNav({ items }: AdminSidebarNavProps) {
                 <p className="text-sm font-semibold">{item.label}</p>
                 <p
                   className={`mt-1 text-xs leading-5 ${
-                    isActive ? "text-[color:var(--color-indigo)]/80" : "text-[color:var(--color-gray-500)]"
+                    isActive ? "text-(--color-indigo)/80" : "text-gray-500"
                   }`}
                 >
                   {item.description}
                 </p>
               </div>
-              <span
-                className={`mt-1 h-2.5 w-2.5 rounded-full ${
-                  isActive ? "bg-[color:var(--color-indigo)]" : "bg-[color:var(--color-gray-300)]"
-                }`}
-              />
             </div>
           </Link>
         );
