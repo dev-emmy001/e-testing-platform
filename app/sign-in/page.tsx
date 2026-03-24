@@ -60,10 +60,10 @@ export default async function SignInPage({ searchParams }: SignInPageProps) {
               </p>
             </div>
             <div className="surface-card rounded-3xl p-5">
-              <p className="text-sm font-semibold text-[color:var(--color-indigo)]">
+              <p className="text-sm font-semibold text-(--color-indigo)">
                 Admin controls
               </p>
-              <p className="mt-2 text-sm text-[color:var(--color-gray-700)]">
+              <p className="mt-2 text-sm text-gray-700">
                 Operators can manage tests, exports, and retakes without SQL
                 access.
               </p>

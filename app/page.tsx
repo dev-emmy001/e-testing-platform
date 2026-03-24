@@ -214,7 +214,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
                         remaining: {latestSession.retakes_remaining}
                       </p>
                     ) : (
-                      <p className="mt-3 text-sm text-[color:var(--color-gray-600)]">
+                      <p className="mt-3 text-sm text-gray-600">
                         No attempts recorded yet.
                       </p>
                     )}
@@ -296,7 +296,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
                 );
               })
             ) : (
-              <p className="text-sm text-[color:var(--color-gray-700)]">
+              <p className="text-sm text-gray-700">
                 Your attempt history will appear here after you start a test.
               </p>
             )}
