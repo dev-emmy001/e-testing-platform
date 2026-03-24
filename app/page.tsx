@@ -42,7 +42,7 @@ export default async function HomePage({ searchParams }: HomePageProps) {
             </h1>
             <p className="mt-5 max-w-2xl text-lg leading-8 text-gray-700">
               Trainees sign in by magic link, complete a randomized test, and
-              get their score immediately. Admins manage question banks,
+              get their score immediately. Admins manage question libraries,
               results, retakes, and CSV exports from one interface.
             </p>
 

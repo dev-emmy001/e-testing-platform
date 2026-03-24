@@ -19,7 +19,7 @@ const navItems = [
   {
     href: "/admin/questions",
     label: "Questions",
-    description: "Build and maintain the assessment question bank.",
+    description: "Organize the reusable question library and categories.",
   },
   {
     href: "/admin/results",

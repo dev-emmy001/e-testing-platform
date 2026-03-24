@@ -5,11 +5,11 @@ import {
   formatPercentage,
   getStatusClasses,
 } from "@/utils/format";
+import type { TestQuestionLinkRecord } from "@/utils/question-library";
 import type { SessionRecord, TestRecord } from "@/utils/test-sessions";
 
 type QuestionRow = {
   id: string;
-  test_id: string;
 };
 
 type ProfileRow = {
@@ -66,16 +66,16 @@ function getAverageScoreLabel(sessions: SessionRecord[]) {
 
 function buildTestSummaries(
   tests: TestRecord[],
-  questions: QuestionRow[],
+  testQuestionLinks: TestQuestionLinkRecord[],
   sessions: SessionRecord[],
 ) {
   const questionCountsByTest = new Map<string, number>();
   const sessionsByTest = new Map<string, SessionRecord[]>();
 
-  for (const question of questions) {
+  for (const link of testQuestionLinks) {
     questionCountsByTest.set(
-      question.test_id,
-      (questionCountsByTest.get(question.test_id) ?? 0) + 1,
+      link.test_id,
+      (questionCountsByTest.get(link.test_id) ?? 0) + 1,
     );
   }
 
@@ -131,6 +131,7 @@ export default async function AdminOverviewPage() {
   const [
     { data: tests },
     { data: questions },
+    { data: testQuestions },
     { data: sessions },
     { data: profiles },
   ] = await Promise.all([
@@ -141,7 +142,11 @@ export default async function AdminOverviewPage() {
       )
       .order("created_at", { ascending: false })
       .returns<TestRecord[]>(),
-    supabase.from("questions").select("id, test_id").returns<QuestionRow[]>(),
+    supabase.from("questions").select("id").returns<QuestionRow[]>(),
+    supabase
+      .from("test_questions")
+      .select("test_id, question_id")
+      .returns<TestQuestionLinkRecord[]>(),
     supabase
       .from("test_sessions")
       .select(
@@ -154,6 +159,7 @@ export default async function AdminOverviewPage() {
 
   const testRows = tests ?? [];
   const questionRows = questions ?? [];
+  const testQuestionRows = testQuestions ?? [];
   const sessionRows = sessions ?? [];
   const profileRows = profiles ?? [];
 
@@ -177,7 +183,11 @@ export default async function AdminOverviewPage() {
       : "—";
   const scoredSessions = getScoredSessions(sessionRows);
   const averageScoreLabel = getAverageScoreLabel(sessionRows);
-  const testSummaries = buildTestSummaries(testRows, questionRows, sessionRows);
+  const testSummaries = buildTestSummaries(
+    testRows,
+    testQuestionRows,
+    sessionRows,
+  );
   const profileMap = new Map(
     profileRows.map((profile) => [profile.id, profile.email]),
   );
@@ -229,12 +239,12 @@ export default async function AdminOverviewPage() {
 
   const watchlist = [
     ...questionBankAlerts.slice(0, 3).map((summary) => ({
-      href: "/admin/questions",
+      href: "/admin/tests",
       label: summary.test.title,
       detail:
         summary.bankGap === 1
-          ? "Needs 1 more question to meet the configured draw size."
-          : `Needs ${summary.bankGap} more questions to support full random draws.`,
+          ? "Needs 1 more selected question to meet the configured draw size."
+          : `Needs ${summary.bankGap} more selected questions to support full random draws.`,
       tone: "bg-[color:var(--color-orange)] text-white",
     })),
     ...(expiredSessions.length
@@ -294,7 +304,7 @@ export default async function AdminOverviewPage() {
                 href="/admin/questions"
                 className="secondary-button inline-flex items-center justify-center px-5 py-3 text-sm"
               >
-                Open question bank
+                Open question library
               </Link>
             </div>
           </div>
@@ -308,8 +318,8 @@ export default async function AdminOverviewPage() {
             </p>
             <p className="mt-3 text-sm leading-7 text-white/80">
               {questionBankAlerts.length
-                ? `${questionBankAlerts.length} active tests need more questions before every draw can be fully randomized.`
-                : "All active tests currently have enough questions to cover their configured draw size."}
+                ? `${questionBankAlerts.length} active tests need more selected questions before every draw can be fully randomized.`
+                : "All active tests currently have enough selected questions to cover their configured draw size."}
             </p>
 
             <div className="mt-6 grid gap-3 sm:grid-cols-2">
@@ -491,8 +501,8 @@ export default async function AdminOverviewPage() {
               Test performance board
             </h3>
             <p className="mt-2 max-w-3xl text-sm leading-7 text-gray-700">
-              Keep the publishing state, question coverage, and outcome volume
-              for every test in view.
+              Keep the publishing state, selected-question coverage, and outcome
+              volume for every test in view.
             </p>
           </div>
 
@@ -507,7 +517,7 @@ export default async function AdminOverviewPage() {
               href="/admin/questions"
               className="secondary-button inline-flex items-center justify-center px-4 py-2 text-sm"
             >
-              Add questions
+              Open library
             </Link>
           </div>
         </div>
@@ -552,7 +562,7 @@ export default async function AdminOverviewPage() {
                 <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                   <div className="rounded-[1.25rem] bg-gray-100 px-4 py-4">
                     <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-500">
-                      Bank
+                      Selected
                     </p>
                     <p className="mt-2 text-2xl font-bold text-gray-900">
                       {summary.questionCount}
@@ -593,7 +603,7 @@ export default async function AdminOverviewPage() {
                       </span>
                     ) : (
                       <span className="status-pill bg-(--color-green) text-white">
-                        Question bank ready
+                        Selection ready
                       </span>
                     )}
                     {summary.liveCount > 0 ? (

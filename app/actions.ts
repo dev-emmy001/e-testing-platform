@@ -3,8 +3,11 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireAdminContext, requireUserContext } from "@/utils/auth/session";
+import { coerceQuestionType } from "@/utils/question-library";
 import { createClient } from "@/utils/supabase/server";
 import { createSessionForUser } from "@/utils/test-sessions";
+
+type AdminSupabaseClient = Awaited<ReturnType<typeof requireAdminContext>>["supabase"];
 
 function asString(formData: FormData, key: string) {
   const value = formData.get(key);
@@ -19,6 +22,17 @@ function asInt(formData: FormData, key: string, fallback = 0) {
 
 function asBoolean(formData: FormData, key: string) {
   return formData.get(key) === "on";
+}
+
+function asStringList(formData: FormData, key: string) {
+  return Array.from(
+    new Set(
+      formData
+        .getAll(key)
+        .flatMap((value) => (typeof value === "string" ? [value.trim()] : []))
+        .filter(Boolean),
+    ),
+  );
 }
 
 function withFlash(
@@ -42,15 +56,99 @@ function withFlash(
   return queryString ? `${path}?${queryString}` : path;
 }
 
-function parseQuestionOptions(type: string, rawOptions: string) {
-  if (type === "true_false") {
-    return ["True", "False"];
+function getQuestionOptionInputs(formData: FormData) {
+  return Array.from({ length: 4 }, (_, index) => asString(formData, `option${index}`));
+}
+
+function parseQuestionInput(formData: FormData) {
+  const type = coerceQuestionType(asString(formData, "type"));
+  const optionInputs = getQuestionOptionInputs(formData);
+  const selectedCorrectOptionIndex = asString(formData, "correctOptionIndex");
+  const parsedCorrectOptionIndex = Number.parseInt(selectedCorrectOptionIndex, 10);
+  const hasValidCorrectOptionIndex =
+    Number.isInteger(parsedCorrectOptionIndex) &&
+    parsedCorrectOptionIndex >= 0 &&
+    parsedCorrectOptionIndex < optionInputs.length;
+  const correctAnswer = hasValidCorrectOptionIndex
+    ? optionInputs[parsedCorrectOptionIndex] ?? ""
+    : "";
+
+  return {
+    categoryId: asString(formData, "categoryId"),
+    correctAnswer,
+    hasValidCorrectOptionIndex,
+    optionInputs,
+    options: optionInputs.filter(Boolean),
+    questionText: asString(formData, "questionText"),
+    selectedCorrectOptionIndex,
+    title: asString(formData, "title"),
+    type,
+  };
+}
+
+function getQuestionValidationError(input: ReturnType<typeof parseQuestionInput>) {
+  if (!input.categoryId || !input.title || !input.questionText) {
+    return "Select a category, enter a title, and enter the question text.";
   }
 
-  return rawOptions
-    .split("\n")
-    .map((option) => option.trim())
-    .filter(Boolean);
+  if (input.options.length < 2) {
+    return "Enter at least two options.";
+  }
+
+  if (!input.selectedCorrectOptionIndex || !input.hasValidCorrectOptionIndex) {
+    return "Select one correct option.";
+  }
+
+  if (!input.correctAnswer) {
+    return "The correct option must have a value.";
+  }
+
+  return null;
+}
+
+async function syncTestQuestions(
+  supabase: AdminSupabaseClient,
+  testId: string,
+  questionIds: string[],
+) {
+  if (questionIds.length) {
+    const { data: matchingQuestions, error: questionsError } = await supabase
+      .from("questions")
+      .select("id")
+      .in("id", questionIds);
+
+    if (questionsError) {
+      throw questionsError;
+    }
+
+    if ((matchingQuestions ?? []).length !== questionIds.length) {
+      throw new Error("One or more selected questions no longer exist.");
+    }
+  }
+
+  const { error: deleteError } = await supabase
+    .from("test_questions")
+    .delete()
+    .eq("test_id", testId);
+
+  if (deleteError) {
+    throw deleteError;
+  }
+
+  if (!questionIds.length) {
+    return;
+  }
+
+  const { error: insertError } = await supabase.from("test_questions").insert(
+    questionIds.map((questionId) => ({
+      question_id: questionId,
+      test_id: testId,
+    })),
+  );
+
+  if (insertError) {
+    throw insertError;
+  }
 }
 
 export async function signOutAction() {
@@ -97,20 +195,34 @@ export async function createTestAction(formData: FormData) {
     const title = asString(formData, "title");
     const timeLimit = asInt(formData, "timeLimitMins", 60);
     const questionsPerAttempt = asInt(formData, "questionsPerAttempt", 30);
+    const questionIds = asStringList(formData, "questionIds");
 
     if (!title) {
       destination = withFlash("/admin/tests", { error: "A title is required." });
     } else {
-      const { error } = await supabase.from("tests").insert({
-        title,
-        time_limit_mins: Math.max(1, timeLimit),
-        questions_per_attempt: Math.max(1, questionsPerAttempt),
-        is_active: asBoolean(formData, "isActive"),
-      });
+      const { data: createdTest, error } = await supabase
+        .from("tests")
+        .insert({
+          title,
+          time_limit_mins: Math.max(1, timeLimit),
+          questions_per_attempt: Math.max(1, questionsPerAttempt),
+          is_active: asBoolean(formData, "isActive"),
+        })
+        .select("id, title")
+        .maybeSingle<{ id: string; title: string }>();
 
-      destination = error
-        ? withFlash("/admin/tests", { error: error.message })
-        : withFlash("/admin/tests", { message: `Created "${title}".` });
+      if (error) {
+        destination = withFlash("/admin/tests", { error: error.message });
+      } else if (!createdTest) {
+        destination = withFlash("/admin/tests", {
+          error: "The test could not be created.",
+        });
+      } else {
+        await syncTestQuestions(supabase, createdTest.id, questionIds);
+        destination = withFlash("/admin/tests", {
+          message: `Created "${createdTest.title}".`,
+        });
+      }
     }
   } catch {
     destination = withFlash("/admin/tests", {
@@ -135,6 +247,7 @@ export async function updateTestAction(formData: FormData) {
       const title = asString(formData, "title");
       const timeLimit = asInt(formData, "timeLimitMins", 60);
       const questionsPerAttempt = asInt(formData, "questionsPerAttempt", 30);
+      const questionIds = asStringList(formData, "questionIds");
 
       const { error } = await supabase
         .from("tests")
@@ -146,9 +259,12 @@ export async function updateTestAction(formData: FormData) {
         })
         .eq("id", testId);
 
-      destination = error
-        ? withFlash("/admin/tests", { error: error.message })
-        : withFlash("/admin/tests", { message: `Saved "${title}".` });
+      if (error) {
+        destination = withFlash("/admin/tests", { error: error.message });
+      } else {
+        await syncTestQuestions(supabase, testId, questionIds);
+        destination = withFlash("/admin/tests", { message: `Saved "${title}".` });
+      }
     } catch {
       destination = withFlash("/admin/tests", {
         error: "The test could not be updated.",
@@ -161,52 +277,88 @@ export async function updateTestAction(formData: FormData) {
   redirect(destination);
 }
 
-export async function createQuestionAction(formData: FormData) {
+export async function createQuestionCategoryAction(formData: FormData) {
   const { supabase } = await requireAdminContext("/admin/questions");
   let destination = withFlash("/admin/questions", {
+    error: "The category could not be created.",
+  });
+
+  try {
+    const name = asString(formData, "name");
+
+    if (!name) {
+      destination = withFlash("/admin/questions", {
+        error: "Enter a category name.",
+      });
+    } else {
+      const { error } = await supabase.from("question_categories").insert({ name });
+
+      destination = error
+        ? withFlash("/admin/questions", { error: error.message })
+        : withFlash("/admin/questions", { message: `Created "${name}".` });
+    }
+  } catch {
+    destination = withFlash("/admin/questions", {
+      error: "The category could not be created.",
+    });
+  }
+
+  revalidatePath("/admin/questions");
+  revalidatePath("/admin/questions/new");
+  revalidatePath("/admin/tests");
+  redirect(destination);
+}
+
+export async function createQuestionAction(formData: FormData) {
+  const { supabase } = await requireAdminContext("/admin/questions/new");
+  let destination = withFlash("/admin/questions/new", {
     error: "The question could not be created.",
   });
 
   try {
-    const testId = asString(formData, "testId");
-    const type = asString(formData, "type") || "multiple_choice";
-    const questionText = asString(formData, "questionText");
-    const correctAnswer = asString(formData, "correctAnswer");
-    const options = parseQuestionOptions(type, asString(formData, "optionsText"));
+    const input = parseQuestionInput(formData);
+    const validationError = getQuestionValidationError(input);
 
-    if (!testId || !questionText) {
-      destination = withFlash("/admin/questions", {
-        error: "Pick a test and enter the question text.",
-      });
-    } else if (options.length < 2) {
-      destination = withFlash("/admin/questions", {
-        error: "Each question needs at least two options.",
-      });
-    } else if (!options.includes(correctAnswer)) {
-      destination = withFlash("/admin/questions", {
-        error: "The correct answer must match one of the options exactly.",
+    if (validationError) {
+      destination = withFlash("/admin/questions/new", {
+        error: validationError,
       });
     } else {
-      const { error } = await supabase.from("questions").insert({
-        test_id: testId,
-        type,
-        question_text: questionText,
-        options,
-        correct_answer: correctAnswer,
-      });
+      const { data: createdQuestion, error } = await supabase
+        .from("questions")
+        .insert({
+          category_id: input.categoryId,
+          type: input.type,
+          question_text: input.questionText,
+          title: input.title,
+          options: input.options,
+          correct_answer: input.correctAnswer,
+        })
+        .select("id")
+        .maybeSingle<{ id: string }>();
 
-      destination = error
-        ? withFlash("/admin/questions", { error: error.message })
-        : withFlash("/admin/questions", { message: "Question added to the bank." });
+      if (error) {
+        destination = withFlash("/admin/questions/new", { error: error.message });
+      } else if (!createdQuestion) {
+        destination = withFlash("/admin/questions/new", {
+          error: "The question could not be created.",
+        });
+      } else {
+        destination = withFlash(`/admin/questions/${createdQuestion.id}`, {
+          message: "Question added to the library.",
+        });
+      }
     }
   } catch {
-    destination = withFlash("/admin/questions", {
+    destination = withFlash("/admin/questions/new", {
       error: "The question could not be created.",
     });
   }
 
   revalidatePath("/admin");
   revalidatePath("/admin/questions");
+  revalidatePath("/admin/questions/new");
+  revalidatePath("/admin/tests");
   redirect(destination);
 }
 
@@ -219,42 +371,32 @@ export async function updateQuestionAction(formData: FormData) {
 
   if (questionId) {
     try {
-      const testId = asString(formData, "testId");
-      const type = asString(formData, "type") || "multiple_choice";
-      const questionText = asString(formData, "questionText");
-      const correctAnswer = asString(formData, "correctAnswer");
-      const options = parseQuestionOptions(type, asString(formData, "optionsText"));
+      const input = parseQuestionInput(formData);
+      const validationError = getQuestionValidationError(input);
 
-      if (!testId || !questionText) {
-        destination = withFlash("/admin/questions", {
-          error: "Pick a test and enter the question text.",
-        });
-      } else if (options.length < 2) {
-        destination = withFlash("/admin/questions", {
-          error: "Each question needs at least two options.",
-        });
-      } else if (!options.includes(correctAnswer)) {
-        destination = withFlash("/admin/questions", {
-          error: "The correct answer must match one of the options exactly.",
+      if (validationError) {
+        destination = withFlash(`/admin/questions/${questionId}`, {
+          error: validationError,
         });
       } else {
         const { error } = await supabase
           .from("questions")
           .update({
-            test_id: testId,
-            type,
-            question_text: questionText,
-            options,
-            correct_answer: correctAnswer,
+            category_id: input.categoryId,
+            type: input.type,
+            question_text: input.questionText,
+            title: input.title,
+            options: input.options,
+            correct_answer: input.correctAnswer,
           })
           .eq("id", questionId);
 
         destination = error
-          ? withFlash("/admin/questions", { error: error.message })
-          : withFlash("/admin/questions", { message: "Question updated." });
+          ? withFlash(`/admin/questions/${questionId}`, { error: error.message })
+          : withFlash(`/admin/questions/${questionId}`, { message: "Question updated." });
       }
     } catch {
-      destination = withFlash("/admin/questions", {
+      destination = withFlash(`/admin/questions/${questionId}`, {
         error: "The question could not be updated.",
       });
     }
@@ -262,25 +404,32 @@ export async function updateQuestionAction(formData: FormData) {
 
   revalidatePath("/admin");
   revalidatePath("/admin/questions");
+  revalidatePath("/admin/tests");
+  if (questionId) {
+    revalidatePath(`/admin/questions/${questionId}`);
+  }
   redirect(destination);
 }
 
 export async function deleteQuestionAction(formData: FormData) {
   const { supabase } = await requireAdminContext("/admin/questions");
   const questionId = asString(formData, "questionId");
-  let destination = withFlash("/admin/questions", {
-    error: "The question could not be removed.",
-  });
+  let destination = withFlash(
+    questionId ? `/admin/questions/${questionId}` : "/admin/questions",
+    {
+      error: "The question could not be removed.",
+    },
+  );
 
   if (questionId) {
     try {
       const { error } = await supabase.from("questions").delete().eq("id", questionId);
 
       destination = error
-        ? withFlash("/admin/questions", { error: error.message })
+        ? withFlash(`/admin/questions/${questionId}`, { error: error.message })
         : withFlash("/admin/questions", { message: "Question removed." });
     } catch {
-      destination = withFlash("/admin/questions", {
+      destination = withFlash(`/admin/questions/${questionId}`, {
         error: "The question could not be removed.",
       });
     }

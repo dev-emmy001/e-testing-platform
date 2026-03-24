@@ -114,7 +114,7 @@ colours sparingly as status signals, not decoration. The indigo primary should d
 
 ## Database schema (Supabase / PostgreSQL)
 
-Six tables. Run all SQL blocks in the Supabase SQL Editor in the order shown below.
+Eight tables. Run all SQL blocks in the Supabase SQL Editor in the order shown below.
 
 ### Block 1 — profiles (auto-populated by auth trigger)
 
@@ -140,7 +140,7 @@ create trigger on_auth_user_created
   for each row execute procedure public.handle_new_user();
 ```
 
-### Block 2 — tests and questions
+### Block 2 — tests, categories, questions, and test links
 
 ```sql
 create table tests (
@@ -152,14 +152,29 @@ create table tests (
   created_at timestamptz default now()
 );
 
+create table question_categories (
+  id uuid default gen_random_uuid() primary key,
+  name text not null unique,
+  created_at timestamptz default now()
+);
+
 create table questions (
   id uuid default gen_random_uuid() primary key,
-  test_id uuid references tests on delete cascade not null,
+  category_id uuid references question_categories not null,
+  title text not null,
   type text not null check (type in ('multiple_choice', 'true_false')),
   question_text text not null,
   options jsonb not null,
   correct_answer text not null,
   created_at timestamptz default now()
+);
+
+create table test_questions (
+  id uuid default gen_random_uuid() primary key,
+  test_id uuid references tests on delete cascade not null,
+  question_id uuid references questions on delete cascade not null,
+  created_at timestamptz default now(),
+  unique (test_id, question_id)
 );
 ```
 
@@ -203,7 +218,9 @@ create table answers (
 ```sql
 alter table profiles        enable row level security;
 alter table tests           enable row level security;
+alter table question_categories enable row level security;
 alter table questions       enable row level security;
+alter table test_questions  enable row level security;
 alter table test_sessions   enable row level security;
 alter table session_questions enable row level security;
 alter table answers         enable row level security;
@@ -222,11 +239,23 @@ create policy "Admins manage tests"
   on tests for all
   using (exists (select 1 from profiles where id = auth.uid() and role = 'admin'));
 
+-- question_categories
+create policy "Read question categories"
+  on question_categories for select using (true);
+create policy "Admins manage question categories"
+  on question_categories for all
+  using (exists (select 1 from profiles where id = auth.uid() and role = 'admin'));
+
 -- questions (correct_answer is withheld in API code, not at RLS level)
 create policy "Read questions"
   on questions for select using (true);
 create policy "Admins manage questions"
   on questions for all
+  using (exists (select 1 from profiles where id = auth.uid() and role = 'admin'));
+
+-- test_questions
+create policy "Admins manage test question links"
+  on test_questions for all
   using (exists (select 1 from profiles where id = auth.uid() and role = 'admin'));
 
 -- test_sessions
@@ -446,8 +475,8 @@ your-project/
 │   │   └── page.tsx              ← email input form
 │   ├── admin/
 │   │   ├── page.tsx              ← admin dashboard home
-│   │   ├── tests/                ← create/edit/delete tests
-│   │   ├── questions/            ← question bank editor
+│   │   ├── tests/                ← create/edit tests + select library questions
+│   │   ├── questions/            ← question library index + dynamic question editor
 │   │   ├── results/              ← results table + CSV export
 │   │   └── trainees/             ← completion tracker + retake management
 │   ├── test/
@@ -477,7 +506,7 @@ your-project/
 ### Randomisation
 On session start, one server action runs:
 ```sql
-SELECT id FROM questions WHERE test_id = $1 ORDER BY RANDOM() LIMIT $2
+SELECT question_id FROM test_questions WHERE test_id = $1 ORDER BY RANDOM() LIMIT $2
 ```
 Results are written to `session_questions` with positions. The question set is locked.
 

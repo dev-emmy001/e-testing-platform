@@ -78,14 +78,13 @@ export async function GET(request: NextRequest, { params }: ExportRouteProps) {
   const sessionIds = (sessions ?? []).map((session) => session.id);
   const traineeIds = Array.from(new Set((sessions ?? []).map((session) => session.trainee_id)));
 
-  const [{ data: profiles }, { data: questions }, { data: answers }] = await Promise.all([
+  const [{ data: profiles }, { data: answers }] = await Promise.all([
     traineeIds.length
       ? admin
           .from("profiles")
           .select("id, email")
           .in("id", traineeIds)
       : Promise.resolve({ data: [] }),
-    admin.from("questions").select("id, question_text").eq("test_id", testId),
     sessionIds.length
       ? admin
           .from("answers")
@@ -94,6 +93,16 @@ export async function GET(request: NextRequest, { params }: ExportRouteProps) {
           .returns<ExportAnswer[]>()
       : Promise.resolve({ data: [] }),
   ]);
+
+  const questionIds = Array.from(
+    new Set((answers ?? []).map((answer) => answer.question_id).filter(Boolean)),
+  );
+  const { data: questions } = questionIds.length
+    ? await admin
+        .from("questions")
+        .select("id, question_text")
+        .in("id", questionIds)
+    : { data: [] };
 
   const profileMap = new Map((profiles ?? []).map((profile) => [profile.id as string, profile.email as string]));
   const questionMap = new Map((questions ?? []).map((question) => [question.id as string, question.question_text as string]));
