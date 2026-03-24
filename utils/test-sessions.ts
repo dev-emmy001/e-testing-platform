@@ -24,9 +24,25 @@ export type SessionRecord = {
   retakes_remaining: number;
 };
 
+type LegacySessionRecord = Omit<
+  SessionRecord,
+  "attempt_number" | "retakes_remaining"
+> & {
+  attempt_number?: number | null;
+  retakes_remaining?: number | null;
+};
+
 type SessionQuestionRecord = {
   question_id: string;
   position: number;
+};
+
+type TestQuestionRecord = {
+  question_id: string;
+};
+
+type LegacyQuestionRecord = {
+  id: string;
 };
 
 type QuestionRecord = {
@@ -58,6 +74,10 @@ export type SessionExperience = {
   }>;
 };
 
+const LEGACY_SESSION_SELECT =
+  "id, test_id, trainee_id, started_at, expires_at, submitted_at, status, score, total_questions";
+const SESSION_SELECT = `${LEGACY_SESSION_SELECT}, attempt_number, retakes_remaining`;
+
 function shuffle<T>(items: T[]) {
   const copy = [...items];
 
@@ -85,21 +105,224 @@ function dedupeAnswers(answers: AnswerRecord[]) {
   return map;
 }
 
+function normalizeSessionRecord(
+  session: LegacySessionRecord,
+  defaults?: Partial<Pick<SessionRecord, "attempt_number" | "retakes_remaining">>,
+): SessionRecord {
+  return {
+    ...session,
+    attempt_number: session.attempt_number ?? defaults?.attempt_number ?? 1,
+    retakes_remaining:
+      session.retakes_remaining ?? defaults?.retakes_remaining ?? 0,
+  };
+}
+
+function isMissingSchemaEntityError(error: {
+  code?: string | null;
+  details?: string | null;
+  hint?: string | null;
+  message?: string | null;
+}) {
+  const diagnostics = [
+    error.code,
+    error.message,
+    error.details,
+    error.hint,
+  ]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
+
+  return (
+    error.code === "42P01" ||
+    error.code === "42703" ||
+    error.code === "PGRST204" ||
+    error.code === "PGRST205" ||
+    diagnostics.includes("schema cache") ||
+    diagnostics.includes("does not exist") ||
+    diagnostics.includes("could not find the table")
+  );
+}
+
+async function getTestQuestionIds(admin: ReturnType<typeof createAdminClient>, testId: string) {
+  const { data: linkedQuestions, error: linkedQuestionsError } = await admin
+    .from("test_questions")
+    .select("question_id")
+    .eq("test_id", testId)
+    .returns<TestQuestionRecord[]>();
+
+  if (linkedQuestionsError && !isMissingSchemaEntityError(linkedQuestionsError)) {
+    throw linkedQuestionsError;
+  }
+
+  const linkedQuestionIds = (linkedQuestions ?? [])
+    .map((row) => row.question_id)
+    .filter(Boolean);
+
+  if (linkedQuestionIds.length) {
+    return linkedQuestionIds;
+  }
+
+  const { data: legacyQuestions, error: legacyQuestionsError } = await admin
+    .from("questions")
+    .select("id")
+    .eq("test_id", testId)
+    .returns<LegacyQuestionRecord[]>();
+
+  if (legacyQuestionsError) {
+    if (!linkedQuestionsError || !isMissingSchemaEntityError(legacyQuestionsError)) {
+      throw legacyQuestionsError;
+    }
+
+    return [];
+  }
+
+  const legacyQuestionIds = (legacyQuestions ?? []).map((row) => row.id).filter(Boolean);
+
+  if (legacyQuestionIds.length) {
+    console.warn("Using legacy questions.test_id fallback for test session creation.", {
+      testId,
+    });
+  }
+
+  return legacyQuestionIds;
+}
+
+async function getSessionHistoryForUser(
+  admin: ReturnType<typeof createAdminClient>,
+  userId: string,
+  testId: string,
+) {
+  const { data: sessions, error } = await admin
+    .from("test_sessions")
+    .select(SESSION_SELECT)
+    .eq("test_id", testId)
+    .eq("trainee_id", userId)
+    .order("attempt_number", { ascending: false })
+    .returns<SessionRecord[]>();
+
+  if (!error) {
+    return sessions ?? [];
+  }
+
+  if (!isMissingSchemaEntityError(error)) {
+    throw error;
+  }
+
+  const { data: legacySessions, error: legacyError } = await admin
+    .from("test_sessions")
+    .select(LEGACY_SESSION_SELECT)
+    .eq("test_id", testId)
+    .eq("trainee_id", userId)
+    .order("started_at", { ascending: false })
+    .returns<LegacySessionRecord[]>();
+
+  if (legacyError) {
+    throw legacyError;
+  }
+
+  const fallbackSessions = (legacySessions ?? []).map((session, index, allSessions) =>
+    normalizeSessionRecord(session, {
+      attempt_number: allSessions.length - index,
+      retakes_remaining: 0,
+    }),
+  );
+
+  if (fallbackSessions.length) {
+    console.warn("Using legacy test_sessions fallback for session history.", {
+      testId,
+      userId,
+    });
+  }
+
+  return fallbackSessions;
+}
+
+async function insertSessionRecord(
+  admin: ReturnType<typeof createAdminClient>,
+  input: {
+    attemptNumber: number;
+    expiresAt: string;
+    retakesRemaining: number;
+    testId: string;
+    userId: string;
+  },
+) {
+  const { data: session, error } = await admin
+    .from("test_sessions")
+    .insert({
+      test_id: input.testId,
+      trainee_id: input.userId,
+      expires_at: input.expiresAt,
+      attempt_number: input.attemptNumber,
+      retakes_remaining: input.retakesRemaining,
+    })
+    .select("id")
+    .maybeSingle<{ id: string }>();
+
+  if (!error) {
+    return session ?? null;
+  }
+
+  if (!isMissingSchemaEntityError(error)) {
+    throw error;
+  }
+
+  const { data: legacySession, error: legacyError } = await admin
+    .from("test_sessions")
+    .insert({
+      test_id: input.testId,
+      trainee_id: input.userId,
+      expires_at: input.expiresAt,
+    })
+    .select("id")
+    .maybeSingle<{ id: string }>();
+
+  if (legacyError) {
+    throw legacyError;
+  }
+
+  console.warn("Using legacy test_sessions fallback for session creation.", {
+    testId: input.testId,
+    userId: input.userId,
+  });
+
+  return legacySession ?? null;
+}
+
 async function getSessionById(sessionId: string) {
   const admin = createAdminClient();
   const { data: session, error } = await admin
     .from("test_sessions")
-    .select(
-      "id, test_id, trainee_id, started_at, expires_at, submitted_at, status, score, total_questions, attempt_number, retakes_remaining",
-    )
+    .select(SESSION_SELECT)
     .eq("id", sessionId)
     .maybeSingle<SessionRecord>();
 
-  if (error) {
+  if (!error) {
+    return session ?? null;
+  }
+
+  if (!isMissingSchemaEntityError(error)) {
     throw error;
   }
 
-  return session ?? null;
+  const { data: legacySession, error: legacyError } = await admin
+    .from("test_sessions")
+    .select(LEGACY_SESSION_SELECT)
+    .eq("id", sessionId)
+    .maybeSingle<LegacySessionRecord>();
+
+  if (legacyError) {
+    throw legacyError;
+  }
+
+  if (legacySession) {
+    console.warn("Using legacy test_sessions fallback for session lookup.", {
+      sessionId,
+    });
+  }
+
+  return legacySession ? normalizeSessionRecord(legacySession) : null;
 }
 
 async function getSessionQuestions(sessionId: string) {
@@ -180,21 +403,8 @@ export async function createSessionForUser(userId: string, testId: string) {
     return { error: "That test is not available right now." };
   }
 
-  const { data: sessionHistory, error: historyError } = await admin
-    .from("test_sessions")
-    .select(
-      "id, test_id, trainee_id, started_at, expires_at, submitted_at, status, score, total_questions, attempt_number, retakes_remaining",
-    )
-    .eq("test_id", testId)
-    .eq("trainee_id", userId)
-    .order("attempt_number", { ascending: false })
-    .returns<SessionRecord[]>();
-
-  if (historyError) {
-    throw historyError;
-  }
-
-  let latestSession = sessionHistory?.[0] ?? null;
+  const sessionHistory = await getSessionHistoryForUser(admin, userId, testId);
+  let latestSession = sessionHistory[0] ?? null;
 
   if (latestSession?.status === "in_progress") {
     const isExpired = new Date(latestSession.expires_at).getTime() <= Date.now();
@@ -211,18 +421,7 @@ export async function createSessionForUser(userId: string, testId: string) {
     return { error: "No retakes remain for this test yet." };
   }
 
-  const { data: questionRows, error: questionsError } = await admin
-    .from("questions")
-    .select("id")
-    .eq("test_id", testId);
-
-  if (questionsError) {
-    throw questionsError;
-  }
-
-  const questionIds = (questionRows ?? [])
-    .map((row) => row.id as string)
-    .filter(Boolean);
+  const questionIds = await getTestQuestionIds(admin, testId);
 
   if (!questionIds.length) {
     return { error: "This test has no questions yet." };
@@ -239,21 +438,13 @@ export async function createSessionForUser(userId: string, testId: string) {
     ? Math.max(latestSession.retakes_remaining - 1, 0)
     : 0;
 
-  const { data: session, error: insertSessionError } = await admin
-    .from("test_sessions")
-    .insert({
-      test_id: testId,
-      trainee_id: userId,
-      expires_at: expiresAt,
-      attempt_number: attemptNumber,
-      retakes_remaining: retakesRemaining,
-    })
-    .select("id")
-    .maybeSingle<{ id: string }>();
-
-  if (insertSessionError) {
-    throw insertSessionError;
-  }
+  const session = await insertSessionRecord(admin, {
+    attemptNumber,
+    expiresAt,
+    retakesRemaining,
+    testId,
+    userId,
+  });
 
   if (!session) {
     return { error: "The test session could not be created." };
@@ -411,7 +602,7 @@ export async function finalizeSession(
   const submittedAt = new Date().toISOString();
   const totalQuestions = sessionQuestions.length;
 
-  const { data: updatedSession, error: updateError } = await admin
+  const { error: updateError } = await admin
     .from("test_sessions")
     .update({
       status: nextStatus,
@@ -419,15 +610,13 @@ export async function finalizeSession(
       score,
       total_questions: totalQuestions,
     })
-    .eq("id", sessionId)
-    .select(
-      "id, test_id, trainee_id, started_at, expires_at, submitted_at, status, score, total_questions, attempt_number, retakes_remaining",
-    )
-    .maybeSingle<SessionRecord>();
+    .eq("id", sessionId);
 
   if (updateError) {
     throw updateError;
   }
+
+  const updatedSession = await getSessionById(sessionId);
 
   return {
     session: updatedSession ?? {

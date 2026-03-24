@@ -71,7 +71,12 @@ export async function startTestSessionAction(formData: FormData) {
       destination = result.sessionId
         ? `/test/${result.sessionId}`
         : withFlash("/", { error: result.error ?? "The test could not be started." });
-    } catch {
+    } catch (error) {
+      console.error("Unable to create a test session.", {
+        error,
+        testId,
+        userId: user.id,
+      });
       destination = withFlash("/", {
         error: "The test session could not be created right now.",
       });
