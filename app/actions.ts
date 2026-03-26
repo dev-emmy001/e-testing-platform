@@ -3,7 +3,11 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireAdminContext, requireUserContext } from "@/utils/auth/session";
-import { coerceQuestionType } from "@/utils/question-library";
+import {
+  coerceQuestionType,
+  getStoredQuestionTitle,
+  type QuestionCategoryRecord,
+} from "@/utils/question-library";
 import { createClient } from "@/utils/supabase/server";
 import { createSessionForUser } from "@/utils/test-sessions";
 
@@ -56,13 +60,45 @@ function withFlash(
   return queryString ? `${path}?${queryString}` : path;
 }
 
+function withQuestionLibraryState(params: {
+  drawer?: "new";
+  error?: string;
+  message?: string;
+  questionId?: string;
+}) {
+  const destination = new URL(
+    withFlash("/admin/questions", {
+      error: params.error,
+      message: params.message,
+    }),
+    "http://localhost",
+  );
+
+  if (params.drawer) {
+    destination.searchParams.set("drawer", params.drawer);
+  }
+
+  if (params.questionId) {
+    destination.searchParams.set("questionId", params.questionId);
+  }
+
+  return `${destination.pathname}${destination.search}`;
+}
+
 function getQuestionOptionInputs(formData: FormData) {
   return Array.from({ length: 4 }, (_, index) => asString(formData, `option${index}`));
 }
 
+function normalizeCategoryName(value: string) {
+  return value.replace(/\s+/g, " ").trim();
+}
+
 function parseQuestionInput(formData: FormData) {
   const type = coerceQuestionType(asString(formData, "type"));
-  const optionInputs = getQuestionOptionInputs(formData);
+  const optionInputs =
+    type === "true_false"
+      ? getQuestionOptionInputs(formData).slice(0, 2)
+      : getQuestionOptionInputs(formData);
   const selectedCorrectOptionIndex = asString(formData, "correctOptionIndex");
   const parsedCorrectOptionIndex = Number.parseInt(selectedCorrectOptionIndex, 10);
   const hasValidCorrectOptionIndex =
@@ -74,21 +110,20 @@ function parseQuestionInput(formData: FormData) {
     : "";
 
   return {
-    categoryId: asString(formData, "categoryId"),
+    categoryName: normalizeCategoryName(asString(formData, "categoryName")),
     correctAnswer,
     hasValidCorrectOptionIndex,
     optionInputs,
     options: optionInputs.filter(Boolean),
     questionText: asString(formData, "questionText"),
     selectedCorrectOptionIndex,
-    title: asString(formData, "title"),
     type,
   };
 }
 
 function getQuestionValidationError(input: ReturnType<typeof parseQuestionInput>) {
-  if (!input.categoryId || !input.title || !input.questionText) {
-    return "Select a category, enter a title, and enter the question text.";
+  if (!input.categoryName || !input.questionText) {
+    return "Enter a category and the question text.";
   }
 
   if (input.options.length < 2) {
@@ -104,6 +139,52 @@ function getQuestionValidationError(input: ReturnType<typeof parseQuestionInput>
   }
 
   return null;
+}
+
+async function resolveQuestionCategoryId(
+  supabase: AdminSupabaseClient,
+  categoryName: string,
+) {
+  const normalizedCategoryName = normalizeCategoryName(categoryName);
+
+  if (!normalizedCategoryName) {
+    throw new Error("Enter a category.");
+  }
+
+  const { data: categories, error: categoriesError } = await supabase
+    .from("question_categories")
+    .select("id, name")
+    .returns<Pick<QuestionCategoryRecord, "id" | "name">[]>();
+
+  if (categoriesError) {
+    throw categoriesError;
+  }
+
+  const existingCategory = (categories ?? []).find(
+    (category) => normalizeCategoryName(category.name).toLowerCase() === normalizedCategoryName.toLowerCase(),
+  );
+
+  if (existingCategory) {
+    return existingCategory.id;
+  }
+
+  const { data: createdCategory, error: createCategoryError } = await supabase
+    .from("question_categories")
+    .insert({
+      name: normalizedCategoryName,
+    })
+    .select("id")
+    .maybeSingle<{ id: string }>();
+
+  if (createCategoryError) {
+    throw createCategoryError;
+  }
+
+  if (!createdCategory) {
+    throw new Error("The category could not be created.");
+  }
+
+  return createdCategory.id;
 }
 
 async function syncTestQuestions(
@@ -284,7 +365,7 @@ export async function createQuestionCategoryAction(formData: FormData) {
   });
 
   try {
-    const name = asString(formData, "name");
+    const name = normalizeCategoryName(asString(formData, "name"));
 
     if (!name) {
       destination = withFlash("/admin/questions", {
@@ -304,14 +385,14 @@ export async function createQuestionCategoryAction(formData: FormData) {
   }
 
   revalidatePath("/admin/questions");
-  revalidatePath("/admin/questions/new");
   revalidatePath("/admin/tests");
   redirect(destination);
 }
 
 export async function createQuestionAction(formData: FormData) {
-  const { supabase } = await requireAdminContext("/admin/questions/new");
-  let destination = withFlash("/admin/questions/new", {
+  const { supabase } = await requireAdminContext("/admin/questions");
+  let destination = withQuestionLibraryState({
+    drawer: "new",
     error: "The question could not be created.",
   });
 
@@ -320,17 +401,19 @@ export async function createQuestionAction(formData: FormData) {
     const validationError = getQuestionValidationError(input);
 
     if (validationError) {
-      destination = withFlash("/admin/questions/new", {
+      destination = withQuestionLibraryState({
+        drawer: "new",
         error: validationError,
       });
     } else {
+      const categoryId = await resolveQuestionCategoryId(supabase, input.categoryName);
       const { data: createdQuestion, error } = await supabase
         .from("questions")
         .insert({
-          category_id: input.categoryId,
+          category_id: categoryId,
           type: input.type,
           question_text: input.questionText,
-          title: input.title,
+          title: getStoredQuestionTitle(input.questionText),
           options: input.options,
           correct_answer: input.correctAnswer,
         })
@@ -338,26 +421,31 @@ export async function createQuestionAction(formData: FormData) {
         .maybeSingle<{ id: string }>();
 
       if (error) {
-        destination = withFlash("/admin/questions/new", { error: error.message });
+        destination = withQuestionLibraryState({
+          drawer: "new",
+          error: error.message,
+        });
       } else if (!createdQuestion) {
-        destination = withFlash("/admin/questions/new", {
+        destination = withQuestionLibraryState({
+          drawer: "new",
           error: "The question could not be created.",
         });
       } else {
-        destination = withFlash(`/admin/questions/${createdQuestion.id}`, {
+        destination = withQuestionLibraryState({
           message: "Question added to the library.",
+          questionId: createdQuestion.id,
         });
       }
     }
   } catch {
-    destination = withFlash("/admin/questions/new", {
+    destination = withQuestionLibraryState({
+      drawer: "new",
       error: "The question could not be created.",
     });
   }
 
   revalidatePath("/admin");
   revalidatePath("/admin/questions");
-  revalidatePath("/admin/questions/new");
   revalidatePath("/admin/tests");
   redirect(destination);
 }
@@ -375,29 +463,35 @@ export async function updateQuestionAction(formData: FormData) {
       const validationError = getQuestionValidationError(input);
 
       if (validationError) {
-        destination = withFlash(`/admin/questions/${questionId}`, {
+        destination = withQuestionLibraryState({
           error: validationError,
+          questionId,
         });
       } else {
+        const categoryId = await resolveQuestionCategoryId(supabase, input.categoryName);
         const { error } = await supabase
           .from("questions")
           .update({
-            category_id: input.categoryId,
+            category_id: categoryId,
             type: input.type,
             question_text: input.questionText,
-            title: input.title,
+            title: getStoredQuestionTitle(input.questionText),
             options: input.options,
             correct_answer: input.correctAnswer,
           })
           .eq("id", questionId);
 
         destination = error
-          ? withFlash(`/admin/questions/${questionId}`, { error: error.message })
-          : withFlash(`/admin/questions/${questionId}`, { message: "Question updated." });
+          ? withQuestionLibraryState({ error: error.message, questionId })
+          : withQuestionLibraryState({
+              message: "Question updated.",
+              questionId,
+            });
       }
     } catch {
-      destination = withFlash(`/admin/questions/${questionId}`, {
+      destination = withQuestionLibraryState({
         error: "The question could not be updated.",
+        questionId,
       });
     }
   }
@@ -405,32 +499,28 @@ export async function updateQuestionAction(formData: FormData) {
   revalidatePath("/admin");
   revalidatePath("/admin/questions");
   revalidatePath("/admin/tests");
-  if (questionId) {
-    revalidatePath(`/admin/questions/${questionId}`);
-  }
   redirect(destination);
 }
 
 export async function deleteQuestionAction(formData: FormData) {
   const { supabase } = await requireAdminContext("/admin/questions");
   const questionId = asString(formData, "questionId");
-  let destination = withFlash(
-    questionId ? `/admin/questions/${questionId}` : "/admin/questions",
-    {
-      error: "The question could not be removed.",
-    },
-  );
+  let destination = withQuestionLibraryState({
+    error: "The question could not be removed.",
+    questionId: questionId || undefined,
+  });
 
   if (questionId) {
     try {
       const { error } = await supabase.from("questions").delete().eq("id", questionId);
 
       destination = error
-        ? withFlash(`/admin/questions/${questionId}`, { error: error.message })
-        : withFlash("/admin/questions", { message: "Question removed." });
+        ? withQuestionLibraryState({ error: error.message, questionId })
+        : withQuestionLibraryState({ message: "Question removed." });
     } catch {
-      destination = withFlash(`/admin/questions/${questionId}`, {
+      destination = withQuestionLibraryState({
         error: "The question could not be removed.",
+        questionId,
       });
     }
   }

@@ -28,6 +28,13 @@ type ExportAnswer = {
   session_id: string;
 };
 
+type ExportSessionQuestion = {
+  position: number;
+  question_id: string;
+  question_text: string;
+  session_id: string;
+};
+
 function escapeCsv(value: string | number | boolean | null | undefined) {
   const rawValue = value == null ? "" : String(value);
 
@@ -78,7 +85,7 @@ export async function GET(request: NextRequest, { params }: ExportRouteProps) {
   const sessionIds = (sessions ?? []).map((session) => session.id);
   const traineeIds = Array.from(new Set((sessions ?? []).map((session) => session.trainee_id)));
 
-  const [{ data: profiles }, { data: answers }] = await Promise.all([
+  const [{ data: profiles }, { data: answers }, { data: sessionQuestions }] = await Promise.all([
     traineeIds.length
       ? admin
           .from("profiles")
@@ -92,20 +99,21 @@ export async function GET(request: NextRequest, { params }: ExportRouteProps) {
           .in("session_id", sessionIds)
           .returns<ExportAnswer[]>()
       : Promise.resolve({ data: [] }),
+    sessionIds.length
+      ? admin
+          .from("session_questions")
+          .select("session_id, question_id, question_text, position")
+          .in("session_id", sessionIds)
+          .returns<ExportSessionQuestion[]>()
+      : Promise.resolve({ data: [] }),
   ]);
-
-  const questionIds = Array.from(
-    new Set((answers ?? []).map((answer) => answer.question_id).filter(Boolean)),
+  const sessionQuestionMap = new Map(
+    (sessionQuestions ?? []).map((sessionQuestion) => [
+      `${sessionQuestion.session_id}:${sessionQuestion.question_id}`,
+      sessionQuestion,
+    ]),
   );
-  const { data: questions } = questionIds.length
-    ? await admin
-        .from("questions")
-        .select("id, question_text")
-        .in("id", questionIds)
-    : { data: [] };
-
   const profileMap = new Map((profiles ?? []).map((profile) => [profile.id as string, profile.email as string]));
-  const questionMap = new Map((questions ?? []).map((question) => [question.id as string, question.question_text as string]));
   const answersBySessionId = new Map<string, ExportAnswer[]>();
 
   for (const answer of answers ?? []) {
@@ -113,6 +121,34 @@ export async function GET(request: NextRequest, { params }: ExportRouteProps) {
     currentAnswers.push(answer);
     answersBySessionId.set(answer.session_id, currentAnswers);
   }
+
+  for (const sessionAnswers of answersBySessionId.values()) {
+    sessionAnswers.sort((left, right) => {
+      const leftPosition =
+        sessionQuestionMap.get(`${left.session_id}:${left.question_id}`)?.position ??
+        Number.MAX_SAFE_INTEGER;
+      const rightPosition =
+        sessionQuestionMap.get(`${right.session_id}:${right.question_id}`)?.position ??
+        Number.MAX_SAFE_INTEGER;
+
+      return leftPosition - rightPosition;
+    });
+  }
+
+  const snapshotMissing = Boolean(sessionIds.length) && !sessionQuestions?.length;
+  const questionIds =
+    snapshotMissing || !sessionQuestions?.length
+      ? Array.from(
+          new Set((answers ?? []).map((answer) => answer.question_id).filter(Boolean)),
+        )
+      : [];
+  const { data: questions } = questionIds.length
+    ? await admin
+        .from("questions")
+        .select("id, question_text")
+        .in("id", questionIds)
+    : { data: [] };
+  const questionMap = new Map((questions ?? []).map((question) => [question.id as string, question.question_text as string]));
 
   const rows = [
     [
@@ -146,7 +182,14 @@ export async function GET(request: NextRequest, { params }: ExportRouteProps) {
           escapeCsv(session.total_questions ?? ""),
           escapeCsv(session.started_at),
           escapeCsv(session.submitted_at ?? ""),
-          escapeCsv(answer ? questionMap.get(answer.question_id) ?? "" : ""),
+          escapeCsv(
+            answer
+              ? sessionQuestionMap.get(`${answer.session_id}:${answer.question_id}`)
+                  ?.question_text ??
+                  questionMap.get(answer.question_id) ??
+                  ""
+              : "",
+          ),
           escapeCsv(answer?.selected_answer ?? ""),
           escapeCsv(answer?.is_correct ?? ""),
         ].join(","),

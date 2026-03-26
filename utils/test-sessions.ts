@@ -33,9 +33,18 @@ type LegacySessionRecord = Omit<
 };
 
 type SessionQuestionRecord = {
+  correct_answer: string;
+  options: unknown;
   question_id: string;
+  question_text: string;
+  question_type: "multiple_choice" | "true_false";
   position: number;
 };
+
+type LegacySessionQuestionRecord = Pick<
+  SessionQuestionRecord,
+  "position" | "question_id"
+>;
 
 type TestQuestionRecord = {
   question_id: string;
@@ -188,6 +197,27 @@ async function getTestQuestionIds(admin: ReturnType<typeof createAdminClient>, t
   return legacyQuestionIds;
 }
 
+async function getQuestionsByIds(
+  admin: ReturnType<typeof createAdminClient>,
+  questionIds: string[],
+) {
+  if (!questionIds.length) {
+    return [] as QuestionRecord[];
+  }
+
+  const { data: questions, error } = await admin
+    .from("questions")
+    .select("id, type, question_text, options, correct_answer")
+    .in("id", questionIds)
+    .returns<QuestionRecord[]>();
+
+  if (error) {
+    throw error;
+  }
+
+  return questions ?? [];
+}
+
 async function getSessionHistoryForUser(
   admin: ReturnType<typeof createAdminClient>,
   userId: string,
@@ -329,16 +359,57 @@ async function getSessionQuestions(sessionId: string) {
   const admin = createAdminClient();
   const { data, error } = await admin
     .from("session_questions")
-    .select("question_id, position")
+    .select("question_id, position, question_type, question_text, options, correct_answer")
     .eq("session_id", sessionId)
     .order("position", { ascending: true })
     .returns<SessionQuestionRecord[]>();
 
-  if (error) {
+  if (!error) {
+    return data ?? [];
+  }
+
+  if (!isMissingSchemaEntityError(error)) {
     throw error;
   }
 
-  return data ?? [];
+  const { data: legacySessionQuestions, error: legacyError } = await admin
+    .from("session_questions")
+    .select("question_id, position")
+    .eq("session_id", sessionId)
+    .order("position", { ascending: true })
+    .returns<LegacySessionQuestionRecord[]>();
+
+  if (legacyError) {
+    throw legacyError;
+  }
+
+  const questionIds = (legacySessionQuestions ?? [])
+    .map((item) => item.question_id)
+    .filter(Boolean);
+  const questions = await getQuestionsByIds(admin, questionIds);
+  const questionsById = new Map(questions.map((question) => [question.id, question]));
+
+  if (questionIds.length) {
+    console.warn("Using legacy session_questions fallback without snapshots.", {
+      sessionId,
+    });
+  }
+
+  return (legacySessionQuestions ?? []).flatMap((item) => {
+    const question = questionsById.get(item.question_id);
+
+    if (!question) {
+      return [];
+    }
+
+    return {
+      ...item,
+      correct_answer: question.correct_answer,
+      options: question.options,
+      question_text: question.question_text,
+      question_type: question.type,
+    };
+  });
 }
 
 async function writeAnswers(
@@ -431,6 +502,14 @@ export async function createSessionForUser(userId: string, testId: string) {
     0,
     Math.min(test.questions_per_attempt, questionIds.length),
   );
+  const selectedQuestions = await getQuestionsByIds(admin, selectedQuestionIds);
+  const selectedQuestionsById = new Map(
+    selectedQuestions.map((question) => [question.id, question]),
+  );
+
+  if (selectedQuestions.length !== selectedQuestionIds.length) {
+    return { error: "This test is being updated right now. Start it again in a moment." };
+  }
 
   const expiresAt = new Date(Date.now() + test.time_limit_mins * 60_000).toISOString();
   const attemptNumber = latestSession ? latestSession.attempt_number + 1 : 1;
@@ -451,11 +530,23 @@ export async function createSessionForUser(userId: string, testId: string) {
   }
 
   const { error: sessionQuestionsError } = await admin.from("session_questions").insert(
-    selectedQuestionIds.map((questionId, index) => ({
-      session_id: session.id,
-      question_id: questionId,
-      position: index + 1,
-    })),
+    selectedQuestionIds.flatMap((questionId, index) => {
+      const question = selectedQuestionsById.get(questionId);
+
+      if (!question) {
+        return [];
+      }
+
+      return {
+        session_id: session.id,
+        question_id: questionId,
+        position: index + 1,
+        question_type: question.type,
+        question_text: question.question_text,
+        options: question.options,
+        correct_answer: question.correct_answer,
+      };
+    }),
   );
 
   if (sessionQuestionsError) {
@@ -531,17 +622,6 @@ export async function finalizeSession(
     await writeAnswers(sessionId, allowedQuestionIds, submittedAnswers);
   }
 
-  const questionIds = sessionQuestions.map((item) => item.question_id);
-  const { data: questions, error: questionsError } = await admin
-    .from("questions")
-    .select("id, type, question_text, options, correct_answer")
-    .in("id", questionIds)
-    .returns<QuestionRecord[]>();
-
-  if (questionsError) {
-    throw questionsError;
-  }
-
   const { data: answerRows, error: answersError } = await admin
     .from("answers")
     .select("question_id, selected_answer, is_correct, answered_at")
@@ -552,7 +632,9 @@ export async function finalizeSession(
     throw answersError;
   }
 
-  const questionsById = new Map((questions ?? []).map((question) => [question.id, question]));
+  const questionsById = new Map(
+    sessionQuestions.map((question) => [question.question_id, question]),
+  );
   const latestAnswers = dedupeAnswers(answerRows ?? []);
   let score = 0;
 
@@ -650,17 +732,6 @@ export async function loadSessionExperienceForUser(userId: string, sessionId: st
   }
 
   const sessionQuestions = await getSessionQuestions(sessionId);
-  const questionIds = sessionQuestions.map((item) => item.question_id);
-
-  const { data: questions, error: questionsError } = await admin
-    .from("questions")
-    .select("id, type, question_text, options, correct_answer")
-    .in("id", questionIds)
-    .returns<QuestionRecord[]>();
-
-  if (questionsError) {
-    throw questionsError;
-  }
 
   const { data: answers, error: answersError } = await admin
     .from("answers")
@@ -672,27 +743,20 @@ export async function loadSessionExperienceForUser(userId: string, sessionId: st
     throw answersError;
   }
 
-  const questionsById = new Map((questions ?? []).map((question) => [question.id, question]));
   const answersByQuestionId = dedupeAnswers(answers ?? []);
 
   return {
     session,
     test: test ?? null,
-    questions: sessionQuestions.flatMap((item) => {
-      const question = questionsById.get(item.question_id);
-
-      if (!question) {
-        return [];
-      }
-
+    questions: sessionQuestions.map((item) => {
       const answer = answersByQuestionId.get(item.question_id);
 
       return {
         questionId: item.question_id,
         position: item.position,
-        type: question.type,
-        questionText: question.question_text,
-        options: parseOptions(question.options),
+        type: item.question_type,
+        questionText: item.question_text,
+        options: parseOptions(item.options),
         selectedAnswer: answer?.selected_answer ?? null,
         isCorrect: answer?.is_correct ?? null,
       };
