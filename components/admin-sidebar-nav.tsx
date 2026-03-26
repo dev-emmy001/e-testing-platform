@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-type AdminNavItem = {
+export type AdminNavItem = {
   description: string;
   href: string;
   label: string;

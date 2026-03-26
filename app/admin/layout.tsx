@@ -1,11 +1,10 @@
-import Link from "next/link";
 import type { ReactNode } from "react";
-import { SubmitButton } from "@/components/submit-button";
-import { AdminSidebarNav } from "@/components/admin-sidebar-nav";
-import { signOutAction } from "@/app/actions";
+import { AdminMobileSidebar } from "@/components/admin-mobile-sidebar";
+import { AdminSidebarContent } from "@/components/admin-sidebar-content";
+import type { AdminNavItem } from "@/components/admin-sidebar-nav";
 import { requireAdminContext } from "@/utils/auth/session";
 
-const navItems = [
+const navItems: AdminNavItem[] = [
   {
     href: "/admin",
     label: "Overview",
@@ -42,35 +41,16 @@ export default async function AdminLayout({
 
   return (
     <div className="min-h-screen px-4 py-4 sm:px-6 lg:px-8">
-      <div className="mx-auto grid min-h-[calc(100vh-2rem)] max-w-7xl gap-4 lg:grid-cols-[280px_1fr]">
-        <aside className="surface-card rounded-4xl p-6 lg:sticky lg:top-4 h-max">
-          <div className="rounded-[1.75rem] bg-[linear-gradient(160deg,rgba(61,58,142,1),rgba(41,171,226,0.88))] px-5 py-5 text-white shadow-[0_20px_40px_rgba(42,40,101,0.18)]">
-            <h1 className="text-xl uppercase font-bold">Admin console</h1>
-            <p className="mt-2 text-sm text-white/80">{profile.email}</p>
-          </div>
+      <div className="mx-auto max-w-7xl space-y-4 lg:grid lg:min-h-[calc(100vh-2rem)] lg:grid-cols-[280px_minmax(0,1fr)] lg:items-start lg:gap-4 lg:space-y-0">
+        <AdminMobileSidebar email={profile.email}>
+          <AdminSidebarContent email={profile.email} items={navItems} />
+        </AdminMobileSidebar>
 
-          <AdminSidebarNav items={navItems} />
-
-          <div className="mt-6 space-y-3">
-            <Link
-              href="/?view=trainee"
-              className="secondary-button inline-flex w-full items-center justify-center px-5 py-3 text-sm"
-            >
-              Open trainee view
-            </Link>
-
-            <form action={signOutAction}>
-              <SubmitButton
-                pendingLabel="Signing out..."
-                className="primary-button inline-flex w-full items-center justify-center px-5 py-3 text-sm"
-              >
-                Sign out
-              </SubmitButton>
-            </form>
-          </div>
+        <aside className="surface-card hidden h-max rounded-4xl p-6 lg:sticky lg:top-4 lg:block">
+          <AdminSidebarContent email={profile.email} items={navItems} />
         </aside>
 
-        <div className="space-y-4">{children}</div>
+        <div className="min-w-0 space-y-4">{children}</div>
       </div>
     </div>
   );
