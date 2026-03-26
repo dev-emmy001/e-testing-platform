@@ -8,6 +8,7 @@ import { AdminQuestionsDashboard } from "@/components/admin-questions-dashboard"
 import { requireAdminContext } from "@/utils/auth/session";
 import { getSearchParamValue } from "@/utils/format";
 import {
+  buildQuestionSearchText,
   buildQuestionUsageCountMap,
   type QuestionSessionUsageRecord,
   type QuestionCategoryRecord,
@@ -114,6 +115,11 @@ export default async function AdminQuestionsPage({
       linkedTests: (linkedTestsByQuestionId.get(question.id) ?? []).sort(
         (left, right) => left.title.localeCompare(right.title),
       ),
+      searchableText: buildQuestionSearchText({
+        ...question,
+        categoryName:
+          categoryNameById.get(question.category_id ?? "") ?? "Uncategorized",
+      }),
       sessionUsageCount: questionSessionUsageCount.get(question.id) ?? 0,
       usageCount: questionUsageCount.get(question.id) ?? 0,
     }),

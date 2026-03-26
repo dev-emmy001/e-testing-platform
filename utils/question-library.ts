@@ -1,3 +1,5 @@
+import { parseOptions } from "@/utils/format";
+
 export const QUESTION_TYPE_VALUES = [
   "multiple_choice",
   "true_false",
@@ -40,6 +42,7 @@ export type QuestionLinkedTestRecord = {
 export type QuestionLibraryEntryRecord = QuestionRecord & {
   categoryName: string;
   linkedTests: QuestionLinkedTestRecord[];
+  searchableText: string;
   sessionUsageCount: number;
   usageCount: number;
 };
@@ -74,6 +77,28 @@ export function getQuestionTitle(question: Pick<QuestionRecord, "question_text">
   }
 
   return `${normalized.slice(0, 81).trimEnd()}...`;
+}
+
+export function buildQuestionSearchText(
+  question: Pick<
+    QuestionRecord,
+    "correct_answer" | "options" | "question_text" | "title" | "type"
+  > & {
+    categoryName?: string;
+  },
+) {
+  return [
+    question.categoryName ?? "",
+    question.title ?? "",
+    question.question_text,
+    question.correct_answer,
+    getQuestionTypeLabel(question.type),
+    ...parseOptions(question.options),
+  ]
+    .map((value) => normalizeQuestionText(value))
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
 }
 
 export function buildQuestionUsageCountMap<

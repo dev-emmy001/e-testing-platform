@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useDeferredValue, useState } from "react";
 import { useRouter } from "next/navigation";
 import { FlashBanner } from "@/components/flash-banner";
 import { QuestionEditorForm } from "@/components/question-editor-form";
@@ -29,14 +29,41 @@ type AdminQuestionsDashboardProps = {
   updateQuestionAction: QuestionAction;
 };
 
-function getQuestionPreview(value: string) {
-  const text = value.trim();
+const ALL_CATEGORIES_FILTER_VALUE = "__all_categories__";
+const UNCATEGORIZED_FILTER_VALUE = "__uncategorized__";
 
-  if (text.length <= 150) {
-    return text;
+type QuestionSortMode = "category" | "newest" | "oldest" | "title";
+
+function getQuestionTimestamp(value: string | null) {
+  return value ? new Date(value).getTime() : 0;
+}
+
+function compareQuestionTitles(
+  left: QuestionLibraryEntryRecord,
+  right: QuestionLibraryEntryRecord,
+) {
+  return getQuestionTitle(left).localeCompare(getQuestionTitle(right));
+}
+
+function compareQuestionCategories(
+  left: QuestionLibraryEntryRecord,
+  right: QuestionLibraryEntryRecord,
+) {
+  if (left.category_id && !right.category_id) {
+    return -1;
   }
 
-  return `${text.slice(0, 147).trimEnd()}...`;
+  if (!left.category_id && right.category_id) {
+    return 1;
+  }
+
+  const categoryComparison = left.categoryName.localeCompare(right.categoryName);
+
+  if (categoryComparison !== 0) {
+    return categoryComparison;
+  }
+
+  return compareQuestionTitles(left, right);
 }
 
 function QuestionMetadataSection({
@@ -148,11 +175,64 @@ export function AdminQuestionsDashboard({
   const [selectedQuestionId, setSelectedQuestionId] = useState(
     initialSelectedQuestionId ?? null,
   );
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedCategoryId, setSelectedCategoryId] = useState(
+    ALL_CATEGORIES_FILTER_VALUE,
+  );
+  const [sortMode, setSortMode] = useState<QuestionSortMode>("newest");
+  const deferredSearchQuery = useDeferredValue(searchQuery);
   const selectedQuestion =
     questions.find((question) => question.id === selectedQuestionId) ?? null;
   const isNewDrawerOpen = drawerMode === "new";
   const isDetailDrawerOpen =
     drawerMode === "detail" && Boolean(selectedQuestion);
+  const normalizedSearchQuery = deferredSearchQuery.trim().toLowerCase();
+  const hasUncategorizedQuestions = questions.some(
+    (question) => question.category_id == null,
+  );
+  const hasActiveFilters =
+    selectedCategoryId !== ALL_CATEGORIES_FILTER_VALUE ||
+    Boolean(searchQuery.trim()) ||
+    sortMode !== "newest";
+  const visibleQuestions = questions
+    .filter((question) => {
+      const matchesCategory =
+        selectedCategoryId === ALL_CATEGORIES_FILTER_VALUE
+          ? true
+          : selectedCategoryId === UNCATEGORIZED_FILTER_VALUE
+            ? question.category_id == null
+            : question.category_id === selectedCategoryId;
+      const matchesSearch = normalizedSearchQuery
+        ? question.searchableText.includes(normalizedSearchQuery)
+        : true;
+
+      return matchesCategory && matchesSearch;
+    })
+    .sort((left, right) => {
+      switch (sortMode) {
+        case "category":
+          return compareQuestionCategories(left, right);
+        case "oldest":
+          return (
+            getQuestionTimestamp(left.created_at) -
+            getQuestionTimestamp(right.created_at)
+          );
+        case "title":
+          return compareQuestionTitles(left, right);
+        case "newest":
+        default:
+          return (
+            getQuestionTimestamp(right.created_at) -
+            getQuestionTimestamp(left.created_at)
+          );
+      }
+    });
+
+  const resetControls = () => {
+    setSearchQuery("");
+    setSelectedCategoryId(ALL_CATEGORIES_FILTER_VALUE);
+    setSortMode("newest");
+  };
 
   const closeDrawer = () => {
     setDrawerMode("closed");
@@ -190,50 +270,125 @@ export function AdminQuestionsDashboard({
           </button>
         </div>
 
+        <div className="mt-6 grid gap-4 lg:grid-cols-[minmax(0,1.8fr)_minmax(0,1fr)_minmax(0,1fr)]">
+          <div>
+            <label className="mb-2 block text-sm font-semibold text-gray-700">
+              Search
+            </label>
+            <input
+              type="search"
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              placeholder="Search by title, prompt, option, or answer"
+              className="field-shell w-full px-4 py-3 outline-none"
+            />
+          </div>
+
+          <div>
+            <label className="mb-2 block text-sm font-semibold text-gray-700">
+              Category
+            </label>
+            <select
+              value={selectedCategoryId}
+              onChange={(event) => setSelectedCategoryId(event.target.value)}
+              className="field-shell w-full px-4 py-3 outline-none"
+            >
+              <option value={ALL_CATEGORIES_FILTER_VALUE}>All categories</option>
+              {categories.map((category) => (
+                <option key={category.id} value={category.id}>
+                  {category.name}
+                </option>
+              ))}
+              {hasUncategorizedQuestions ? (
+                <option value={UNCATEGORIZED_FILTER_VALUE}>
+                  Uncategorized
+                </option>
+              ) : null}
+            </select>
+          </div>
+
+          <div>
+            <label className="mb-2 block text-sm font-semibold text-gray-700">
+              Sort
+            </label>
+            <select
+              value={sortMode}
+              onChange={(event) =>
+                setSortMode(event.target.value as QuestionSortMode)
+              }
+              className="field-shell w-full px-4 py-3 outline-none"
+            >
+              <option value="newest">Newest first</option>
+              <option value="oldest">Oldest first</option>
+              <option value="title">Title A-Z</option>
+              <option value="category">Category A-Z</option>
+            </select>
+          </div>
+        </div>
+
+        <div className="mt-4 flex flex-col gap-3 rounded-[1.5rem] bg-gray-100 px-4 py-3 text-sm text-gray-700 lg:flex-row lg:items-center lg:justify-between">
+          <p>
+            Showing {visibleQuestions.length} of {questions.length} question
+            {questions.length === 1 ? "" : "s"}.
+          </p>
+
+          {hasActiveFilters ? (
+            <button
+              type="button"
+              onClick={resetControls}
+              className="secondary-button px-4 py-2 text-sm"
+            >
+              Reset view
+            </button>
+          ) : null}
+        </div>
+
         <div className="mt-6 space-y-4">
           {questions.length ? (
-            questions.map((question) => (
-              <button
-                key={question.id}
-                type="button"
-                onClick={() => openQuestionDrawer(question.id)}
-                className="block w-full rounded-[1.75rem] border border-gray-300 bg-white p-5 text-left transition hover:border-(--color-indigo)"
-              >
-                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="status-pill bg-(--color-indigo-light) text-(--color-indigo)">
-                        {question.categoryName}
-                      </span>
-                      <span className="status-pill bg-gray-100 text-gray-700">
-                        {getQuestionTypeLabel(question.type)}
-                      </span>
+            visibleQuestions.length ? (
+              visibleQuestions.map((question) => (
+                <button
+                  key={question.id}
+                  type="button"
+                  onClick={() => openQuestionDrawer(question.id)}
+                  className="block w-full rounded-[1.75rem] border border-gray-300 bg-white p-5 text-left transition hover:border-(--color-indigo)"
+                >
+                  <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="status-pill bg-(--color-indigo-light) text-(--color-indigo)">
+                          {question.categoryName}
+                        </span>
+                        <span className="status-pill bg-gray-100 text-gray-700">
+                          {getQuestionTypeLabel(question.type)}
+                        </span>
+                      </div>
+
+                      <h4 className="mt-3 text-xl font-bold text-gray-900">
+                        {getQuestionTitle(question)}
+                      </h4>
                     </div>
 
-                    <h4 className="mt-3 text-xl font-bold text-gray-900">
-                      {getQuestionTitle(question)}
-                    </h4>
-                    <p className="mt-2 text-sm leading-7 text-gray-700">
-                      {getQuestionPreview(question.question_text)}
-                    </p>
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-2 text-sm text-gray-500 lg:justify-end">
-                    <span className="status-pill bg-(--color-cyan)/12 text-(--color-cyan)">
-                      {question.usageCount} linked test
-                      {question.usageCount === 1 ? "" : "s"}
+                    <span className="text-sm font-semibold text-(--color-indigo)">
+                      Open details
                     </span>
-                    {question.sessionUsageCount ? (
-                      <span className="status-pill bg-(--color-orange)/12 text-(--color-orange)">
-                        {question.sessionUsageCount} used session
-                        {question.sessionUsageCount === 1 ? "" : "s"}
-                      </span>
-                    ) : null}
-                    <span>Created {formatDateTime(question.created_at)}</span>
                   </div>
-                </div>
-              </button>
-            ))
+                </button>
+              ))
+            ) : (
+              <div className="rounded-[1.75rem] border border-dashed border-gray-300 bg-white px-5 py-6 text-sm text-gray-700">
+                <p>
+                  No questions match the current search or category filters.
+                </p>
+                <button
+                  type="button"
+                  onClick={resetControls}
+                  className="secondary-button mt-4 px-4 py-2 text-sm"
+                >
+                  Reset view
+                </button>
+              </div>
+            )
           ) : (
             <div className="rounded-[1.75rem] border border-dashed border-gray-300 bg-white px-5 py-6 text-sm text-gray-700">
               No questions are in the library yet. Add your first reusable
