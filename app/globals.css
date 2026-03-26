@@ -41,7 +41,6 @@ body {
   background-repeat: no-repeat;
   color: var(--foreground);
   font-family: var(--font-body);
-  position: relative;
 }
 
 * {
