@@ -27,6 +27,23 @@ export type TestQuestionLinkRecord = {
   test_id: string;
 };
 
+export type QuestionSessionUsageRecord = {
+  question_id: string;
+};
+
+export type QuestionLinkedTestRecord = {
+  id: string;
+  is_active: boolean;
+  title: string;
+};
+
+export type QuestionLibraryEntryRecord = QuestionRecord & {
+  categoryName: string;
+  linkedTests: QuestionLinkedTestRecord[];
+  sessionUsageCount: number;
+  usageCount: number;
+};
+
 export function coerceQuestionType(value: string): QuestionType {
   return value === "true_false" ? "true_false" : "multiple_choice";
 }
@@ -35,24 +52,38 @@ export function getQuestionTypeLabel(type: QuestionType) {
   return type === "true_false" ? "True / False" : "Multiple choice";
 }
 
-export function getQuestionTitle(question: Pick<QuestionRecord, "title" | "question_text">) {
-  const title = question.title?.trim();
-
-  if (title) {
-    return title;
-  }
-
-  if (question.question_text.length <= 84) {
-    return question.question_text;
-  }
-
-  return `${question.question_text.slice(0, 81).trimEnd()}...`;
+function normalizeQuestionText(questionText: string) {
+  return questionText.replace(/\s+/g, " ").trim();
 }
 
-export function buildQuestionUsageCountMap(testQuestionLinks: TestQuestionLinkRecord[]) {
+export function getStoredQuestionTitle(questionText: string) {
+  const normalized = normalizeQuestionText(questionText);
+
+  if (normalized.length <= 80) {
+    return normalized;
+  }
+
+  return normalized.slice(0, 80).trimEnd();
+}
+
+export function getQuestionTitle(question: Pick<QuestionRecord, "question_text">) {
+  const normalized = normalizeQuestionText(question.question_text);
+
+  if (normalized.length <= 84) {
+    return normalized;
+  }
+
+  return `${normalized.slice(0, 81).trimEnd()}...`;
+}
+
+export function buildQuestionUsageCountMap<
+  TQuestionLink extends {
+    question_id: string;
+  },
+>(questionLinks: TQuestionLink[]) {
   const map = new Map<string, number>();
 
-  for (const link of testQuestionLinks) {
+  for (const link of questionLinks) {
     map.set(link.question_id, (map.get(link.question_id) ?? 0) + 1);
   }
 

@@ -246,8 +246,8 @@ export function AdminQuestionsDashboard({
       {isNewDrawerOpen ? (
         <QuestionLibraryDrawer
           eyebrow="New question"
-          title="Add a reusable library question"
-          description="Create the question once, pick an existing category or type a new one, and reuse it across any test you build."
+          title="Add a question"
+          description="Tip: Create the question once, pick an existing category or type a new one, and reuse it across any test you build."
           onClose={closeDrawer}
         >
           <div className="space-y-4">

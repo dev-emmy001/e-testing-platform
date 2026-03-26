@@ -135,12 +135,8 @@ export default async function AdminQuestionsPage({
               Question library
             </p>
             <h2 className="mt-2 text-4xl font-bold text-gray-900">
-              Manage reusable questions without leaving the library
+              Create and manage reusable questions
             </h2>
-            <p className="mt-3 max-w-3xl text-sm leading-7 text-gray-700">
-              Add new questions or open existing ones in a side drawer. Pick an
-              existing category in the editor or type a new one as you save.
-            </p>
           </div>
         </div>
 
