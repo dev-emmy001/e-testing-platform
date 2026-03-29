@@ -49,17 +49,21 @@ export async function getCurrentUserContext(): Promise<UserContext> {
   };
 }
 
-export async function requireUserContext(nextPath = "/"): Promise<AuthenticatedUserContext> {
+export async function requireUserContext(
+  nextPath = "/",
+): Promise<AuthenticatedUserContext> {
   const context = await getCurrentUserContext();
 
   if (!context.user) {
-    redirect(`/sign-in?next=${encodeURIComponent(nextPath)}`);
+    redirect(`/?next=${encodeURIComponent(nextPath)}`);
   }
 
   return context as AuthenticatedUserContext;
 }
 
-export async function requireAdminContext(nextPath = "/admin"): Promise<AdminUserContext> {
+export async function requireAdminContext(
+  nextPath = "/admin",
+): Promise<AdminUserContext> {
   const context = await requireUserContext(nextPath);
 
   if (!context.profile || context.profile.role !== "admin") {

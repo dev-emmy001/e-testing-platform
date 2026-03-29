@@ -38,6 +38,7 @@ body {
     ),
     linear-gradient(180deg, #ffffff 0%, #f7f7fc 48%, #eef2fb 100%);
   background-size: cover;
+  background-attachment: fixed;
   background-repeat: no-repeat;
   color: var(--foreground);
   font-family: var(--font-body);
