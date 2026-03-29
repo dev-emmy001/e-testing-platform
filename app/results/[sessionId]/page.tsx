@@ -10,6 +10,7 @@ import {
   formatPercentage,
   getStatusClasses,
 } from "@/utils/format";
+import { getProfileDisplayName, getProfileMetaLine } from "@/utils/profile";
 
 type ResultsPageProps = {
   params: Promise<{
@@ -19,8 +20,10 @@ type ResultsPageProps = {
 
 export default async function ResultsPage({ params }: ResultsPageProps) {
   const { sessionId } = await params;
-  const { user } = await requireUserContext(`/results/${sessionId}`);
+  const { user, profile } = await requireUserContext(`/results/${sessionId}`);
   let experience = await loadSessionExperienceForUser(user.id, sessionId);
+  const profileDisplayName = getProfileDisplayName(profile);
+  const profileMetaLine = getProfileMetaLine(profile);
 
   if (!experience) {
     redirect("/");
@@ -51,11 +54,16 @@ export default async function ResultsPage({ params }: ResultsPageProps) {
     <main className="mx-auto w-full max-w-5xl px-6 py-10 lg:px-8">
       <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
         <div>
-          <p className="text-sm font-semibold uppercase tracking-[0.18em] text-(--color-purple)">
-            Assessment results
-          </p>
+          <div className="flex items-center gap-3">
+            <p className="text-sm font-semibold uppercase tracking-[0.18em] text-(--color-purple)">
+              Assessment results
+            </p>
+            {profileMetaLine ? (
+              <span className="text-sm text-gray-500">{profileMetaLine}</span>
+            ) : null}
+          </div>
           <h1 className="mt-2 text-4xl font-bold text-gray-900">
-            {experience.test?.title ?? "Assessment"}
+            {profileDisplayName} · {experience.test?.title ?? "Assessment"}
           </h1>
           <p className="mt-3 text-sm leading-7 text-gray-700">
             Attempt {experience.session.attempt_number} completed{" "}

@@ -33,6 +33,7 @@ export type AdminTraineeRecord = {
   activeCompletedCount: number;
   activeTestCount: number;
   allSessions: AdminTraineeSession[];
+  displayName: string;
   email: string;
   id: string;
   lastActivityAt: string | null;
@@ -40,8 +41,10 @@ export type AdminTraineeRecord = {
   latestInProgressCount: number;
   latestSessions: AdminTraineeSession[];
   latestSubmittedCount: number;
+  name: string | null;
   resultCapturedAfterExpiryCount: number;
   role: string;
+  track: string | null;
   totalAttempts: number;
 };
 
@@ -81,13 +84,19 @@ function getScoreLabel(session: AdminTraineeSession) {
 
 function getSessionSearchText(trainee: AdminTraineeRecord) {
   return [
+    trainee.displayName,
     trainee.email,
     trainee.id,
     trainee.role,
+    trainee.track ?? "",
     ...trainee.latestSessions.map((session) => session.testTitle),
   ]
     .join(" ")
     .toLowerCase();
+}
+
+function getTraineeMetaLine(trainee: AdminTraineeRecord) {
+  return [trainee.track, trainee.email].filter(Boolean).join(" · ");
 }
 
 function ViewToggleButton({
@@ -136,9 +145,12 @@ function TraineeGridCard({
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-(--color-purple)">
             Trainee
           </p>
-          <h3 className="mt-2 break-all text-sm font-bold text-gray-900">
-            {trainee.email}
+          <h3 className="mt-2 break-words text-sm font-bold text-gray-900">
+            {trainee.displayName}
           </h3>
+          <p className="mt-2 break-all text-xs text-gray-500">
+            {getTraineeMetaLine(trainee)}
+          </p>
           <p className="mt-3 text-sm text-gray-700">
             {trainee.activeCompletedCount}/{trainee.activeTestCount} active
             tests completed
@@ -209,9 +221,12 @@ function TraineeListRow({
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-(--color-purple)">
             Trainee
           </p>
-          <h3 className="mt-2 break-all font-bold text-gray-900">
-            {trainee.email}
+          <h3 className="mt-2 break-words font-bold text-gray-900">
+            {trainee.displayName}
           </h3>
+          <p className="mt-2 break-all text-sm text-gray-500">
+            {getTraineeMetaLine(trainee)}
+          </p>
         </div>
 
         <div>
@@ -285,14 +300,22 @@ function TraineeDetailDrawer({
                 </p>
                 <h2
                   id="trainee-drawer-title"
-                  className="mt-2 break-all text-3xl font-bold text-gray-900"
+                  className="mt-2 break-words text-3xl font-bold text-gray-900"
                 >
-                  {trainee.email}
+                  {trainee.displayName}
                 </h2>
+                <p className="mt-3 break-all text-sm text-gray-600">
+                  {getTraineeMetaLine(trainee)}
+                </p>
                 <div className="mt-4 flex flex-wrap gap-2">
                   <span className="status-pill bg-(--color-indigo-light) text-(--color-indigo)">
                     {trainee.role}
                   </span>
+                  {trainee.track ? (
+                    <span className="status-pill bg-gray-100 text-gray-700">
+                      {trainee.track}
+                    </span>
+                  ) : null}
                   <span className="status-pill bg-gray-100 text-gray-700">
                     {trainee.totalAttempts} total attempts
                   </span>
@@ -354,6 +377,30 @@ function TraineeDetailDrawer({
               <dl className="mt-4 grid gap-4 sm:grid-cols-2">
                 <div>
                   <dt className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
+                    Name
+                  </dt>
+                  <dd className="mt-2 text-sm text-gray-900">
+                    {trainee.displayName}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
+                    Track
+                  </dt>
+                  <dd className="mt-2 text-sm text-gray-900">
+                    {trainee.track ?? "—"}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
+                    Email
+                  </dt>
+                  <dd className="mt-2 break-all text-sm text-gray-900">
+                    {trainee.email}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
                     User ID
                   </dt>
                   <dd className="mt-2 break-all font-mono text-sm text-gray-900">
@@ -382,7 +429,7 @@ function TraineeDetailDrawer({
                   </h3>
                   <p className="mt-2 text-sm leading-7 text-gray-700">
                     This removes sign-in access, the trainee profile, and all
-                    recorded test attempts for {trainee.email}.
+                    recorded test attempts for {trainee.displayName}.
                   </p>
                 </div>
 
@@ -391,7 +438,7 @@ function TraineeDetailDrawer({
                   onSubmit={(event) => {
                     if (
                       !window.confirm(
-                        `Delete ${trainee.email} and all recorded test history? This cannot be undone.`,
+                        `Delete ${trainee.displayName} (${trainee.email}) and all recorded test history? This cannot be undone.`,
                       )
                     ) {
                       event.preventDefault();
@@ -712,7 +759,7 @@ export function AdminTraineesDashboard({
                   setCurrentPage(1);
                   setSelectedTraineeId(null);
                 }}
-                placeholder="Search by email, ID, or test title"
+                placeholder="Search by name, track, email, ID, or test title"
                 className="w-full bg-transparent text-sm text-gray-900 outline-none placeholder:text-gray-500"
               />
 

@@ -5,6 +5,7 @@ import {
   formatPercentage,
   getStatusClasses,
 } from "@/utils/format";
+import { getProfileDisplayName, getProfileMetaLine } from "@/utils/profile";
 import type { TestQuestionLinkRecord } from "@/utils/question-library";
 import type { SessionRecord, TestRecord } from "@/utils/test-sessions";
 
@@ -15,7 +16,9 @@ type QuestionRow = {
 type ProfileRow = {
   email: string;
   id: string;
+  name: string | null;
   role: string;
+  track: string | null;
 };
 
 type DashboardTestSummary = {
@@ -154,7 +157,10 @@ export default async function AdminOverviewPage() {
       )
       .order("started_at", { ascending: false })
       .returns<SessionRecord[]>(),
-    supabase.from("profiles").select("id, email, role").returns<ProfileRow[]>(),
+    supabase
+      .from("profiles")
+      .select("id, email, name, role, track")
+      .returns<ProfileRow[]>(),
   ]);
 
   const testRows = tests ?? [];
@@ -189,7 +195,7 @@ export default async function AdminOverviewPage() {
     sessionRows,
   );
   const profileMap = new Map(
-    profileRows.map((profile) => [profile.id, profile.email]),
+    profileRows.map((profile) => [profile.id, profile]),
   );
   const testTitleMap = new Map(
     testSummaries.map((summary) => [summary.test.id, summary.test.title]),
@@ -439,6 +445,8 @@ export default async function AdminOverviewPage() {
           <div className="mt-5 space-y-3">
             {sessionRows.length ? (
               sessionRows.slice(0, 6).map((session) => {
+                const traineeProfile = profileMap.get(session.trainee_id);
+
                 return (
                   <div
                     key={session.id}
@@ -447,9 +455,15 @@ export default async function AdminOverviewPage() {
                     <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                       <div>
                         <p className="font-semibold text-gray-900">
-                          {profileMap.get(session.trainee_id) ??
-                            "Unknown trainee"}
+                          {traineeProfile
+                            ? getProfileDisplayName(traineeProfile)
+                            : "Unknown trainee"}
                         </p>
+                        {traineeProfile ? (
+                          <p className="mt-1 text-sm text-gray-600">
+                            {getProfileMetaLine(traineeProfile)}
+                          </p>
+                        ) : null}
                         <p className="mt-1 text-sm text-gray-600">
                           {testTitleMap.get(session.test_id) ?? "Unknown test"}{" "}
                           · attempt {session.attempt_number}

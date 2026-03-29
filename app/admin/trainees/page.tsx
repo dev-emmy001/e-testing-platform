@@ -6,12 +6,15 @@ import {
 import { FlashToast } from "@/components/flash-toast";
 import { requireAdminContext } from "@/utils/auth/session";
 import { readFlash } from "@/utils/flash";
+import { getProfileDisplayName, getProfileTrack } from "@/utils/profile";
 import type { SessionRecord, TestRecord } from "@/utils/test-sessions";
 
 type TraineeProfile = {
   email: string;
   id: string;
+  name: string | null;
   role: string;
+  track: string | null;
 };
 
 function buildTraineeSession(
@@ -93,6 +96,7 @@ function buildTraineeRecords(
       ).length,
       activeTestCount,
       allSessions,
+      displayName: getProfileDisplayName(trainee),
       email: trainee.email,
       id: trainee.id,
       lastActivityAt: allSessions[0]?.lastActivityAt ?? null,
@@ -106,12 +110,30 @@ function buildTraineeRecords(
       latestSubmittedCount: latestSessions.filter(
         (session) => session.status === "submitted",
       ).length,
+      name: trainee.name,
       resultCapturedAfterExpiryCount: latestSessions.filter(
         (session) => session.resultCapturedAfterExpiry,
       ).length,
       role: trainee.role,
+      track: getProfileTrack(trainee),
       totalAttempts: allSessions.length,
     };
+  }).sort((left, right) => {
+    const trackComparison = (left.track ?? "").localeCompare(right.track ?? "");
+
+    if (trackComparison !== 0) {
+      return trackComparison;
+    }
+
+    const displayNameComparison = left.displayName.localeCompare(
+      right.displayName,
+    );
+
+    if (displayNameComparison !== 0) {
+      return displayNameComparison;
+    }
+
+    return left.email.localeCompare(right.email);
   });
 }
 
@@ -123,7 +145,7 @@ export default async function AdminTraineesPage() {
     await Promise.all([
       supabase
         .from("profiles")
-        .select("id, email, role")
+        .select("id, email, name, role, track")
         .eq("role", "trainee")
         .order("email", { ascending: true })
         .returns<TraineeProfile[]>(),

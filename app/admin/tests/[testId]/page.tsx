@@ -10,6 +10,7 @@ import {
   formatPercentage,
   getStatusClasses,
 } from "@/utils/format";
+import { getProfileMetaLine } from "@/utils/profile";
 import {
   buildAdminTestTraineeSummaryRecords,
   buildTestLibraryQuestions,
@@ -32,6 +33,8 @@ type AdminTestDetailPageProps = {
 type ProfileRow = {
   email: string;
   id: string;
+  name: string | null;
+  track: string | null;
 };
 
 type TestLibraryQuestionRecord = Pick<
@@ -122,16 +125,16 @@ export default async function AdminTestDetailPage({
   const { data: profiles } = traineeIds.length
     ? await supabase
         .from("profiles")
-        .select("id, email")
+        .select("id, email, name, track")
         .in("id", traineeIds)
         .returns<ProfileRow[]>()
     : { data: [] as ProfileRow[] };
-  const profileEmailById = new Map(
-    (profiles ?? []).map((profile) => [profile.id, profile.email]),
+  const profileById = new Map(
+    (profiles ?? []).map((profile) => [profile.id, profile]),
   );
   const traineeSummaries = buildAdminTestTraineeSummaryRecords(
     sessionRows,
-    profileEmailById,
+    profileById,
   );
   const questionCount = selectedQuestions.length;
   const bankGap = getQuestionBankGap(
@@ -385,9 +388,12 @@ export default async function AdminTestDetailPage({
                       <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[color:var(--color-purple)]">
                         Trainee
                       </p>
-                      <h4 className="mt-2 break-all text-lg font-bold text-[color:var(--color-gray-900)]">
-                        {trainee.email}
+                      <h4 className="mt-2 break-words text-lg font-bold text-[color:var(--color-gray-900)]">
+                        {trainee.displayName}
                       </h4>
+                      <p className="mt-2 break-all text-sm text-[color:var(--color-gray-600)]">
+                        {getProfileMetaLine(trainee)}
+                      </p>
                     </div>
 
                     <span className={`status-pill ${getStatusClasses(trainee.latestStatus)}`}>

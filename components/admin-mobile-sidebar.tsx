@@ -8,7 +8,7 @@ const DESKTOP_MIN_WIDTH = 1024;
 
 type AdminMobileSidebarProps = {
   children: ReactNode;
-  email: string;
+  profileLabel: string;
 };
 
 function HamburgerIcon() {
@@ -31,7 +31,7 @@ function HamburgerIcon() {
 
 export function AdminMobileSidebar({
   children,
-  email,
+  profileLabel,
 }: AdminMobileSidebarProps) {
   const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
@@ -83,7 +83,9 @@ export function AdminMobileSidebar({
               <p className="text-xs font-semibold uppercase tracking-[0.18em] text-(--color-purple)">
                 Admin console
               </p>
-              <p className="mt-1 truncate text-sm text-gray-700">{email}</p>
+              <p className="mt-1 truncate text-sm text-gray-700">
+                {profileLabel}
+              </p>
             </div>
 
             <button

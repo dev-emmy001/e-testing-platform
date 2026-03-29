@@ -1,4 +1,5 @@
 import { formatPercentage } from "@/utils/format";
+import { getProfileDisplayName, getProfileTrack } from "@/utils/profile";
 import {
   buildQuestionUsageCountMap,
   buildTestQuestionIdsMap,
@@ -47,6 +48,7 @@ export type AdminTestDashboardRecord = {
 };
 
 export type AdminTestTraineeSummary = {
+  displayName: string;
   email: string;
   expiredCount: number;
   lastActivityAt: string | null;
@@ -56,8 +58,15 @@ export type AdminTestTraineeSummary = {
   liveCount: number;
   retakesRemaining: number;
   submittedCount: number;
+  track: string | null;
   totalAttempts: number;
   traineeId: string;
+};
+
+type AdminTestProfileIdentity = {
+  email: string;
+  name: string | null;
+  track: string | null;
 };
 
 function getSessionActivityAt(
@@ -237,7 +246,7 @@ export function buildAdminTestDashboardRecords(
 
 export function buildAdminTestTraineeSummaryRecords(
   sessions: SessionRecord[],
-  profileEmailById: Map<string, string>,
+  profileById: Map<string, AdminTestProfileIdentity>,
 ) {
   const sessionsByTrainee = new Map<string, SessionRecord[]>();
 
@@ -261,7 +270,8 @@ export function buildAdminTestTraineeSummaryRecords(
       }, traineeSessions[0]);
 
       return {
-        email: profileEmailById.get(traineeId) ?? "Unknown trainee",
+        displayName: getProfileDisplayName(profileById.get(traineeId)),
+        email: profileById.get(traineeId)?.email ?? "Unknown trainee",
         expiredCount: traineeSessions.filter(
           (session) => session.status === "expired",
         ).length,
@@ -278,6 +288,7 @@ export function buildAdminTestTraineeSummaryRecords(
         submittedCount: traineeSessions.filter(
           (session) => session.status === "submitted",
         ).length,
+        track: getProfileTrack(profileById.get(traineeId)),
         totalAttempts: traineeSessions.length,
         traineeId,
       };
@@ -290,6 +301,6 @@ export function buildAdminTestTraineeSummaryRecords(
         return activityComparison;
       }
 
-      return left.email.localeCompare(right.email);
+      return left.displayName.localeCompare(right.displayName);
     });
 }

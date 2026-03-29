@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { resolveCurrentUserRole } from "@/utils/auth/profile";
+import { getProfileDisplayName } from "@/utils/profile";
 import { createClient } from "@/utils/supabase/server";
 import { createAdminClient } from "@/utils/supabase/admin";
 
@@ -33,6 +34,13 @@ type ExportSessionQuestion = {
   question_id: string;
   question_text: string;
   session_id: string;
+};
+
+type ExportProfile = {
+  email: string;
+  id: string;
+  name: string | null;
+  track: string | null;
 };
 
 function escapeCsv(value: string | number | boolean | null | undefined) {
@@ -89,8 +97,9 @@ export async function GET(request: NextRequest, { params }: ExportRouteProps) {
     traineeIds.length
       ? admin
           .from("profiles")
-          .select("id, email")
+          .select("id, email, name, track")
           .in("id", traineeIds)
+          .returns<ExportProfile[]>()
       : Promise.resolve({ data: [] }),
     sessionIds.length
       ? admin
@@ -113,7 +122,9 @@ export async function GET(request: NextRequest, { params }: ExportRouteProps) {
       sessionQuestion,
     ]),
   );
-  const profileMap = new Map((profiles ?? []).map((profile) => [profile.id as string, profile.email as string]));
+  const profileMap = new Map(
+    (profiles ?? []).map((profile) => [profile.id, profile]),
+  );
   const answersBySessionId = new Map<string, ExportAnswer[]>();
 
   for (const answer of answers ?? []) {
@@ -153,7 +164,9 @@ export async function GET(request: NextRequest, { params }: ExportRouteProps) {
   const rows = [
     [
       "test_title",
+      "trainee_name",
       "trainee_email",
+      "trainee_track",
       "session_id",
       "attempt_number",
       "status",
@@ -169,12 +182,19 @@ export async function GET(request: NextRequest, { params }: ExportRouteProps) {
 
   for (const session of sessions ?? []) {
     const sessionAnswers = answersBySessionId.get(session.id) ?? [null];
+    const traineeProfile = profileMap.get(session.trainee_id);
 
     for (const answer of sessionAnswers) {
       rows.push(
         [
           escapeCsv(test.title),
-          escapeCsv(profileMap.get(session.trainee_id) ?? ""),
+          escapeCsv(
+            traineeProfile
+              ? getProfileDisplayName(traineeProfile)
+              : "Unknown trainee",
+          ),
+          escapeCsv(traineeProfile?.email ?? ""),
+          escapeCsv(traineeProfile?.track ?? ""),
           escapeCsv(session.id),
           escapeCsv(session.attempt_number),
           escapeCsv(session.status),

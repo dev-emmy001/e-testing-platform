@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { requireUserContext } from "@/utils/auth/session";
+import { getProfileDisplayName, getProfileMetaLine } from "@/utils/profile";
 import {
   finalizeExpiredSessionIfNeeded,
   loadSessionExperienceForUser,
@@ -15,8 +16,10 @@ type TestPageProps = {
 
 export default async function TestPage({ params }: TestPageProps) {
   const { sessionId } = await params;
-  const { user } = await requireUserContext(`/test/${sessionId}`);
+  const { user, profile } = await requireUserContext(`/test/${sessionId}`);
   const experience = await loadSessionExperienceForUser(user.id, sessionId);
+  const profileDisplayName = getProfileDisplayName(profile);
+  const profileMetaLine = getProfileMetaLine(profile);
 
   if (!experience) {
     redirect("/");
@@ -34,11 +37,17 @@ export default async function TestPage({ params }: TestPageProps) {
     <main className="mx-auto w-full max-w-5xl px-6 py-10 lg:px-8">
       <div className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
-          <p className="text-sm font-semibold uppercase tracking-[0.18em] text-(--color-purple)">
-            Trainee assessment
-          </p>
+          <div className="flex items-center gap-3">
+            <p className="text-sm font-semibold uppercase tracking-[0.18em] text-(--color-purple)">
+              Trainee assessment
+            </p>
+            {profileMetaLine ? (
+              <span className="text-sm text-gray-500">{profileMetaLine}</span>
+            ) : null}
+          </div>
           <h1 className="mt-2 text-4xl font-bold text-gray-900">
-            Attempt {experience.session.attempt_number}
+            {profileDisplayName} · {experience.test?.title ?? "Assessment"} · Attempt{" "}
+            {experience.session.attempt_number}
           </h1>
           <p className="mt-2 text-sm text-gray-700">
             Work steadily, submit once, and keep this tab open until your score

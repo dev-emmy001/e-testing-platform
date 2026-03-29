@@ -7,11 +7,14 @@ import {
   formatPercentage,
   getStatusClasses,
 } from "@/utils/format";
+import { getProfileDisplayName } from "@/utils/profile";
 import type { SessionRecord, TestRecord } from "@/utils/test-sessions";
 
 type ProfileRow = {
   email: string;
   id: string;
+  name: string | null;
+  track: string | null;
 };
 
 export default async function AdminResultsPage() {
@@ -33,12 +36,14 @@ export default async function AdminResultsPage() {
       .returns<SessionRecord[]>(),
     supabase
       .from("profiles")
-      .select("id, email")
+      .select("id, email, name, track")
       .returns<ProfileRow[]>(),
   ]);
 
   const testMap = new Map((tests ?? []).map((test) => [test.id, test.title]));
-  const profileMap = new Map((profiles ?? []).map((profile) => [profile.id, profile.email]));
+  const profileMap = new Map(
+    (profiles ?? []).map((profile) => [profile.id, profile]),
+  );
 
   return (
     <>
@@ -101,6 +106,7 @@ export default async function AdminResultsPage() {
             <thead>
               <tr className="text-left text-xs font-semibold uppercase tracking-[0.18em] text-[color:var(--color-gray-500)]">
                 <th className="px-3 py-2">Trainee</th>
+                <th className="px-3 py-2">Track</th>
                 <th className="px-3 py-2">Test</th>
                 <th className="px-3 py-2">Status</th>
                 <th className="px-3 py-2">Score</th>
@@ -109,27 +115,44 @@ export default async function AdminResultsPage() {
               </tr>
             </thead>
             <tbody>
-              {(sessions ?? []).map((session) => (
-                <tr key={session.id} className="rounded-[1.5rem] bg-white text-sm text-[color:var(--color-gray-900)]">
-                  <td className="rounded-l-[1.5rem] px-3 py-4 font-medium">
-                    {profileMap.get(session.trainee_id) ?? "Unknown trainee"}
-                  </td>
-                  <td className="px-3 py-4">{testMap.get(session.test_id) ?? "Unknown test"}</td>
-                  <td className="px-3 py-4">
-                    <span className={`status-pill ${getStatusClasses(session.status)}`}>
-                      {session.status.replace("_", " ")}
-                    </span>
-                  </td>
-                  <td className="px-3 py-4">
-                    {session.score ?? 0}/{session.total_questions ?? "—"} (
-                    {formatPercentage(session.score, session.total_questions)})
-                  </td>
-                  <td className="px-3 py-4">{session.attempt_number}</td>
-                  <td className="rounded-r-[1.5rem] px-3 py-4">
-                    {formatDateTime(session.submitted_at ?? session.started_at)}
-                  </td>
-                </tr>
-              ))}
+              {(sessions ?? []).map((session) => {
+                const profile = profileMap.get(session.trainee_id);
+
+                return (
+                  <tr
+                    key={session.id}
+                    className="rounded-[1.5rem] bg-white text-sm text-[color:var(--color-gray-900)]"
+                  >
+                    <td className="rounded-l-[1.5rem] px-3 py-4">
+                      <p className="font-medium">
+                        {profile ? getProfileDisplayName(profile) : "Unknown trainee"}
+                      </p>
+                      {profile?.email ? (
+                        <p className="mt-1 text-xs text-[color:var(--color-gray-500)]">
+                          {profile.email}
+                        </p>
+                      ) : null}
+                    </td>
+                    <td className="px-3 py-4">{profile?.track ?? "—"}</td>
+                    <td className="px-3 py-4">
+                      {testMap.get(session.test_id) ?? "Unknown test"}
+                    </td>
+                    <td className="px-3 py-4">
+                      <span className={`status-pill ${getStatusClasses(session.status)}`}>
+                        {session.status.replace("_", " ")}
+                      </span>
+                    </td>
+                    <td className="px-3 py-4">
+                      {session.score ?? 0}/{session.total_questions ?? "—"} (
+                      {formatPercentage(session.score, session.total_questions)})
+                    </td>
+                    <td className="px-3 py-4">{session.attempt_number}</td>
+                    <td className="rounded-r-[1.5rem] px-3 py-4">
+                      {formatDateTime(session.submitted_at ?? session.started_at)}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

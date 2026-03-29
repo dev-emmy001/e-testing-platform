@@ -4,19 +4,19 @@ import { AdminSidebarNav, type AdminNavItem } from "@/components/admin-sidebar-n
 import { SubmitButton } from "@/components/submit-button";
 
 type AdminSidebarContentProps = {
-  email: string;
+  profileLabel: string;
   items: AdminNavItem[];
 };
 
 export function AdminSidebarContent({
-  email,
+  profileLabel,
   items,
 }: AdminSidebarContentProps) {
   return (
     <>
       <div className="rounded-[1.75rem] bg-[linear-gradient(160deg,rgba(61,58,142,1),rgba(41,171,226,0.88))] px-5 py-5 text-white shadow-[0_20px_40px_rgba(42,40,101,0.18)]">
         <h1 className="text-xl font-bold uppercase">Admin console</h1>
-        <p className="mt-2 text-sm text-white/80">{email}</p>
+        <p className="mt-2 text-sm text-white/80">{profileLabel}</p>
       </div>
 
       <AdminSidebarNav items={items} />
