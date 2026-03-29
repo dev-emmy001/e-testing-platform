@@ -1,7 +1,7 @@
 "use client";
 
 import { useDeferredValue, useEffect, useEffectEvent, useState } from "react";
-import { grantRetakeAction } from "@/app/actions";
+import { deleteTraineeAction, grantRetakeAction } from "@/app/actions";
 import { SubmitButton } from "@/components/submit-button";
 import {
   formatDateTime,
@@ -369,6 +369,45 @@ function TraineeDetailDrawer({
                   </dd>
                 </div>
               </dl>
+            </section>
+
+            <section className="rounded-[1.75rem] border border-[color:var(--color-orange)]/30 bg-[color:var(--color-orange)]/10 p-5">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                <div>
+                  <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[color:var(--color-orange)]">
+                    Danger zone
+                  </p>
+                  <h3 className="mt-2 text-xl font-bold text-gray-900">
+                    Delete trainee
+                  </h3>
+                  <p className="mt-2 text-sm leading-7 text-gray-700">
+                    This removes sign-in access, the trainee profile, and all
+                    recorded test attempts for {trainee.email}.
+                  </p>
+                </div>
+
+                <form
+                  action={deleteTraineeAction}
+                  onSubmit={(event) => {
+                    if (
+                      !window.confirm(
+                        `Delete ${trainee.email} and all recorded test history? This cannot be undone.`,
+                      )
+                    ) {
+                      event.preventDefault();
+                    }
+                  }}
+                  className="shrink-0"
+                >
+                  <input type="hidden" name="traineeId" value={trainee.id} />
+                  <SubmitButton
+                    pendingLabel="Deleting..."
+                    className="inline-flex items-center justify-center rounded-2xl bg-[color:var(--color-orange)] px-5 py-3 text-sm font-semibold text-white shadow-[0_12px_30px_rgba(255,122,61,0.22)] transition hover:bg-[color:var(--color-orange)]/90"
+                  >
+                    Delete trainee
+                  </SubmitButton>
+                </form>
+              </div>
             </section>
 
             <section className="space-y-4">

@@ -257,6 +257,85 @@ async function syncTestQuestions(
   }
 }
 
+function isAuthUserMissingError(error: unknown) {
+  const message = getErrorMessage(error, "").toLowerCase();
+
+  return message.includes("user not found") || message.includes("not found");
+}
+
+async function deleteAuthUserIfPresent(
+  supabase: AdminSupabaseClient,
+  userId: string,
+) {
+  const { data, error } = await supabase.auth.admin.getUserById(userId);
+
+  if (error) {
+    if (isAuthUserMissingError(error)) {
+      return;
+    }
+
+    throw error;
+  }
+
+  if (!data.user) {
+    return;
+  }
+
+  const { error: deleteError } = await supabase.auth.admin.deleteUser(userId);
+
+  if (deleteError) {
+    throw deleteError;
+  }
+}
+
+async function deleteTraineeSessions(
+  supabase: AdminSupabaseClient,
+  traineeId: string,
+) {
+  const { data: sessions, error: sessionsError } = await supabase
+    .from("test_sessions")
+    .select("id")
+    .eq("trainee_id", traineeId)
+    .returns<Array<{ id: string }>>();
+
+  if (sessionsError) {
+    throw sessionsError;
+  }
+
+  const sessionIds = (sessions ?? []).map((session) => session.id);
+
+  if (!sessionIds.length) {
+    return;
+  }
+
+  const { error: answersError } = await supabase
+    .from("answers")
+    .delete()
+    .in("session_id", sessionIds);
+
+  if (answersError) {
+    throw answersError;
+  }
+
+  const { error: sessionQuestionsError } = await supabase
+    .from("session_questions")
+    .delete()
+    .in("session_id", sessionIds);
+
+  if (sessionQuestionsError) {
+    throw sessionQuestionsError;
+  }
+
+  const { error: deleteSessionsError } = await supabase
+    .from("test_sessions")
+    .delete()
+    .eq("trainee_id", traineeId);
+
+  if (deleteSessionsError) {
+    throw deleteSessionsError;
+  }
+}
+
 export async function signOutAction() {
   const supabase = await createClient();
   await supabase.auth.signOut();
@@ -633,5 +712,76 @@ export async function grantRetakeAction(formData: FormData) {
 
   revalidatePath("/admin");
   revalidatePath("/admin/trainees");
+  redirect(destination);
+}
+
+export async function deleteTraineeAction(formData: FormData) {
+  const { profile, supabase, user } = await requireAdminContext(
+    "/admin/trainees",
+  );
+  const traineeId = asString(formData, "traineeId");
+  let destination = withFlash("/admin/trainees", {
+    error: "The trainee could not be deleted.",
+  });
+
+  if (!traineeId) {
+    redirect(destination);
+  }
+
+  if (traineeId === user.id || traineeId === profile.id) {
+    destination = withFlash("/admin/trainees", {
+      error: "You cannot delete the account you are currently using.",
+    });
+    redirect(destination);
+  }
+
+  try {
+    const { data: trainee, error: traineeError } = await supabase
+      .from("profiles")
+      .select("id, email, role")
+      .eq("id", traineeId)
+      .maybeSingle<{ email: string; id: string; role: string }>();
+
+    if (traineeError) {
+      throw traineeError;
+    }
+
+    if (!trainee) {
+      destination = withFlash("/admin/trainees", {
+        error: "That trainee no longer exists.",
+      });
+    } else if (trainee.role !== "trainee") {
+      destination = withFlash("/admin/trainees", {
+        error: "Only trainee profiles can be deleted here.",
+      });
+    } else {
+      await deleteAuthUserIfPresent(supabase, trainee.id);
+      await deleteTraineeSessions(supabase, trainee.id);
+
+      const { error: deleteProfileError } = await supabase
+        .from("profiles")
+        .delete()
+        .eq("id", trainee.id)
+        .eq("role", "trainee");
+
+      if (deleteProfileError) {
+        throw deleteProfileError;
+      }
+
+      destination = withFlash("/admin/trainees", {
+        message: `Deleted trainee "${trainee.email}".`,
+      });
+    }
+  } catch (error) {
+    destination = withFlash("/admin/trainees", {
+      error: getErrorMessage(error, "The trainee could not be deleted."),
+    });
+  }
+
+  revalidatePath("/");
+  revalidatePath("/admin");
+  revalidatePath("/admin/trainees");
+  revalidatePath("/admin/results");
+  revalidatePath("/admin/tests");
   redirect(destination);
 }
