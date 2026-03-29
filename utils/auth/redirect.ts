@@ -6,8 +6,24 @@ export function getSafeRedirectPath(next: string | null | undefined) {
   return next;
 }
 
+const ONBOARDING_PATH = "/onboarding";
+
+function isOnboardingPath(path: string) {
+  return path === ONBOARDING_PATH || path.startsWith(`${ONBOARDING_PATH}?`);
+}
+
 export function getDashboardPathForRole(role: string | null | undefined) {
   return role === "admin" ? "/admin" : "/";
+}
+
+export function getOnboardingPath(next: string | null | undefined) {
+  const safeNext = getSafeRedirectPath(next);
+
+  if (safeNext === "/" || isOnboardingPath(safeNext)) {
+    return ONBOARDING_PATH;
+  }
+
+  return `${ONBOARDING_PATH}?next=${encodeURIComponent(safeNext)}`;
 }
 
 export function getPostAuthRedirectPath(
@@ -16,7 +32,7 @@ export function getPostAuthRedirectPath(
 ) {
   const safeNext = getSafeRedirectPath(next);
 
-  if (safeNext !== "/") {
+  if (safeNext !== "/" && !isOnboardingPath(safeNext)) {
     return safeNext;
   }
 

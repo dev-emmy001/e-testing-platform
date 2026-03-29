@@ -1,9 +1,11 @@
 import type { User } from "@supabase/supabase-js";
 import { redirect } from "next/navigation";
+import { getOnboardingPath } from "@/utils/auth/redirect";
 import {
   resolveCurrentUserProfile,
   type ProfileRecord,
 } from "@/utils/auth/profile";
+import { isProfileComplete } from "@/utils/profile";
 import { createAdminClient } from "@/utils/supabase/admin";
 import { createClient } from "@/utils/supabase/server";
 
@@ -51,11 +53,18 @@ export async function getCurrentUserContext(): Promise<UserContext> {
 
 export async function requireUserContext(
   nextPath = "/",
+  options?: {
+    allowIncompleteProfile?: boolean;
+  },
 ): Promise<AuthenticatedUserContext> {
   const context = await getCurrentUserContext();
 
   if (!context.user) {
     redirect(`/?next=${encodeURIComponent(nextPath)}`);
+  }
+
+  if (!options?.allowIncompleteProfile && !isProfileComplete(context.profile)) {
+    redirect(getOnboardingPath(nextPath));
   }
 
   return context as AuthenticatedUserContext;

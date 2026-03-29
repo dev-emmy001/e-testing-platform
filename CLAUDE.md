@@ -122,7 +122,9 @@ Eight tables. Run all SQL blocks in the Supabase SQL Editor in the order shown b
 create table profiles (
   id uuid references auth.users on delete cascade primary key,
   email text not null,
+  name text,
   role text not null default 'trainee',
+  track text,
   created_at timestamptz default now()
 );
 

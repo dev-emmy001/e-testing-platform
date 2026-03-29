@@ -4,7 +4,9 @@ import { createAdminClient } from "@/utils/supabase/admin";
 export type ProfileRecord = {
   id: string;
   email: string;
+  name: string | null;
   role: string;
+  track: string | null;
   created_at: string | null;
 };
 
@@ -18,7 +20,7 @@ async function readProfileById(
 ): Promise<ProfileRecord | null> {
   const { data } = await supabase
     .from("profiles")
-    .select("id, email, role, created_at")
+    .select("id, email, name, role, track, created_at")
     .eq("id", userId)
     .maybeSingle<ProfileRecord>();
 
@@ -54,7 +56,7 @@ async function repairProfileForUser(user: User): Promise<ProfileRecord | null> {
   if (normalizedEmail) {
     const { data: emailMatches } = await admin
       .from("profiles")
-      .select("id, email, role, created_at")
+      .select("id, email, name, role, track, created_at")
       .ilike("email", normalizedEmail)
       .returns<ProfileRecord[]>();
 
@@ -74,18 +76,22 @@ async function repairProfileForUser(user: User): Promise<ProfileRecord | null> {
       {
         id: user.id,
         email,
+        name: profileByEmail?.name ?? null,
         role: profileByEmail?.role ?? "trainee",
+        track: profileByEmail?.track ?? null,
       },
       { onConflict: "id" },
     )
-    .select("id, email, role, created_at")
+    .select("id, email, name, role, track, created_at")
     .maybeSingle<ProfileRecord>();
 
   return (
     repairedProfile ?? {
       id: user.id,
       email,
+      name: profileByEmail?.name ?? null,
       role: profileByEmail?.role ?? "trainee",
+      track: profileByEmail?.track ?? null,
       created_at: profileByEmail?.created_at ?? null,
     }
   );

@@ -1,9 +1,10 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { AuthEntryScreen } from "@/components/auth-entry-screen";
 import { FlashToast } from "@/components/flash-toast";
 import { SubmitButton } from "@/components/submit-button";
-import { SignInForm } from "@/components/sign-in-form";
 import { signOutAction, startTestSessionAction } from "@/app/actions";
+import { getOnboardingPath } from "@/utils/auth/redirect";
 import { getCurrentUserContext } from "@/utils/auth/session";
 import { readFlash } from "@/utils/flash";
 import {
@@ -12,8 +13,12 @@ import {
   getSearchParamValue,
   getStatusClasses,
 } from "@/utils/format";
+import {
+  getProfileDisplayName,
+  getProfileMetaLine,
+  isProfileComplete,
+} from "@/utils/profile";
 import type { SessionRecord, TestRecord } from "@/utils/test-sessions";
-import Image from "next/image";
 
 type HomePageProps = {
   searchParams: Promise<{
@@ -32,42 +37,11 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   const { profile, supabase, user } = await getCurrentUserContext();
 
   if (!user) {
-    return (
-      <main className="mx-auto flex min-h-screen w-full max-w-6xl flex-col justify-center px-6 py-12 lg:px-8">
-        <FlashToast error={error} message={message} />
+    return <AuthEntryScreen error={error} message={message} nextPath={nextPath} />;
+  }
 
-        <div className="grid gap-12 lg:items-center text-center">
-          <section className="flex flex-col items-center">
-            <Image
-              src="/images/innovation-growth-hub.webp"
-              alt="Innovation Growth Hub"
-              width={200}
-              height={200}
-              className="mb-6"
-            />
-
-            <h1 className="max-w-2xl text-5xl font-display font-black tracking-tight text-gray-900 sm:text-6xl text-center">
-              Digital Skills{" "}
-              <span className="text-(--color-indigo)">Testing Platform</span>
-            </h1>
-            <p className="mt-6 max-w-2xl text-lg leading-8 text-gray-700 mx-auto">
-              Welcome to your final assessment. Sign in to get started.
-            </p>
-          </section>
-
-          <section className="surface-card rounded-4xl p-8 lg:p-12 max-w-md mx-auto">
-            <div>
-              <SignInForm nextPath={nextPath} />
-            </div>
-
-            <p className="mt-8 text-xs leading-5 text-gray-500">
-              By signing in, you agree to our assessment guidelines and platform
-              terms.
-            </p>
-          </section>
-        </div>
-      </main>
-    );
+  if (!isProfileComplete(profile)) {
+    redirect(getOnboardingPath(nextPath));
   }
 
   if (profile?.role === "admin" && view !== "trainee") {
@@ -94,6 +68,8 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   ]);
 
   const latestSessionsByTest = new Map<string, SessionRecord>();
+  const profileDisplayName = getProfileDisplayName(profile);
+  const profileMetaLine = getProfileMetaLine(profile);
 
   for (const session of sessions ?? []) {
     if (!latestSessionsByTest.has(session.test_id)) {
@@ -125,8 +101,14 @@ export default async function HomePage({ searchParams }: HomePageProps) {
             </div>
 
             <h1 className="mt-4 text-4xl font-bold text-gray-900">
-              Welcome back
+              Welcome back,{" "}
+              <span className="text-(--color-indigo)">{profileDisplayName}</span>
             </h1>
+            {profileMetaLine ? (
+              <p className="mt-3 text-sm font-medium text-gray-600">
+                {profileMetaLine}
+              </p>
+            ) : null}
             <p className="mt-3 max-w-3xl text-sm leading-7 text-gray-700">
               Start a new active test, resume an assessment already in progress,
               or review the results from completed attempts.

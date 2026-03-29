@@ -2,13 +2,19 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import {
+  getOnboardingPath,
+  getPostAuthRedirectPath,
+} from "@/utils/auth/redirect";
 import { requireAdminContext, requireUserContext } from "@/utils/auth/session";
 import { clearFlash, setFlash, type FlashState } from "@/utils/flash";
+import { normalizeProfileText } from "@/utils/profile";
 import {
   coerceQuestionType,
   getStoredQuestionTitle,
   type QuestionCategoryRecord,
 } from "@/utils/question-library";
+import { createAdminClient } from "@/utils/supabase/admin";
 import { createClient } from "@/utils/supabase/server";
 import { createSessionForUser } from "@/utils/test-sessions";
 
@@ -360,6 +366,71 @@ export async function signOutAction() {
   await redirectWithDestination(
     withFlash("/", { message: "You have been signed out." }),
   );
+}
+
+export async function completeOnboardingAction(formData: FormData) {
+  const { profile, user } = await requireUserContext("/onboarding", {
+    allowIncompleteProfile: true,
+  });
+  const name = normalizeProfileText(asString(formData, "name"));
+  const track = normalizeProfileText(asString(formData, "track"));
+  const nextPath = asString(formData, "nextPath");
+  const returnPath = getOnboardingPath(nextPath);
+  let destination: RedirectDestination = withFlash(returnPath, {
+    error: "Your profile could not be saved.",
+  });
+
+  if (!name && !track) {
+    destination = withFlash(returnPath, {
+      error: "Enter your name and track before you continue.",
+    });
+  } else if (!name) {
+    destination = withFlash(returnPath, {
+      error: "Enter your name before you continue.",
+    });
+  } else if (!track) {
+    destination = withFlash(returnPath, {
+      error: "Enter your track before you continue.",
+    });
+  } else {
+    try {
+      const email = user.email?.trim() || profile?.email?.trim();
+
+      if (!email) {
+        throw new Error("Your account email is unavailable. Sign out and try again.");
+      }
+
+      const admin = createAdminClient();
+      const { error } = await admin.from("profiles").upsert(
+        {
+          email,
+          id: user.id,
+          name,
+          role: profile?.role ?? "trainee",
+          track,
+        },
+        { onConflict: "id" },
+      );
+
+      destination = error
+        ? withFlash(returnPath, { error: error.message })
+        : withFlash(getPostAuthRedirectPath(nextPath, profile?.role), {
+            message: `Welcome, ${name}.`,
+          });
+    } catch (error) {
+      destination = withFlash(returnPath, {
+        error: getErrorMessage(error, "Your profile could not be saved."),
+      });
+    }
+  }
+
+  revalidatePath("/");
+  revalidatePath("/onboarding");
+  revalidatePath("/admin");
+  revalidatePath("/admin/results");
+  revalidatePath("/admin/tests");
+  revalidatePath("/admin/trainees");
+  await redirectWithDestination(destination);
 }
 
 export async function startTestSessionAction(formData: FormData) {
