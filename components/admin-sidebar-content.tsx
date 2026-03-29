@@ -23,6 +23,13 @@ export function AdminSidebarContent({
 
       <div className="mt-6 space-y-3">
         <Link
+          href="/profile"
+          className="secondary-button inline-flex w-full items-center justify-center px-5 py-3 text-sm"
+        >
+          Edit profile
+        </Link>
+
+        <Link
           href="/?view=trainee"
           className="secondary-button inline-flex w-full items-center justify-center px-5 py-3 text-sm"
         >

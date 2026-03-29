@@ -317,7 +317,7 @@ export function SignInForm({ nextPath }: SignInFormProps) {
   return (
     <div className="grid gap-4">
       {otpSentTo && step === "otp" ? (
-        <p className="rounded-2xl border border-[color:var(--color-cyan)]/35 bg-[color:var(--color-cyan)]/10 px-4 py-3 text-sm text-[color:var(--color-gray-900)]">
+        <p className="rounded-2xl border border-(--color-cyan)/35 bg-(--color-cyan)/10 px-4 py-3 text-sm text-gray-900">
           We sent a 6-digit code to <strong>{otpSentTo}</strong>. Enter it
           below to continue.
         </p>
@@ -339,7 +339,7 @@ export function SignInForm({ nextPath }: SignInFormProps) {
               value={email}
               onChange={(event) => setEmail(event.target.value)}
               placeholder="name@ighub.org"
-              className="field-shell w-full px-4 py-3 text-base outline-none ring-0 transition focus:border-[color:var(--color-indigo)]"
+              className="field-shell w-full px-4 py-3 text-base outline-none ring-0 transition focus:border-(--color-indigo)"
             />
           </div>
 
@@ -355,9 +355,9 @@ export function SignInForm({ nextPath }: SignInFormProps) {
 
       {step === "existing-options" ? (
         <div className="grid gap-4">
-          <div className="rounded-2xl border border-[color:var(--color-indigo)]/15 bg-[color:var(--color-indigo-light)]/70 px-4 py-3 text-sm text-[color:var(--color-gray-900)]">
+          <div className="rounded-2xl border border-(--color-indigo)/15 bg-[color:var(--color-indigo-light)]/70 px-4 py-3 text-sm text-gray-900">
             <p className="font-semibold">Welcome back</p>
-            <p className="mt-1 text-[color:var(--color-gray-700)]">
+            <p className="mt-1 text-gray-700">
               Continue as <strong>{resolvedEmail}</strong> with a 6-digit code,
               or use your password if you have already set one.
             </p>
@@ -389,7 +389,7 @@ export function SignInForm({ nextPath }: SignInFormProps) {
             type="button"
             disabled={isPending}
             onClick={resetToEmailStep}
-            className="text-sm font-medium text-[color:var(--color-indigo)] disabled:cursor-not-allowed disabled:opacity-60"
+            className="text-sm font-medium text-(--color-indigo) disabled:cursor-not-allowed disabled:opacity-60"
           >
             Use a different email
           </button>
@@ -398,9 +398,9 @@ export function SignInForm({ nextPath }: SignInFormProps) {
 
       {step === "new-user" ? (
         <div className="grid gap-4">
-          <div className="rounded-2xl border border-[color:var(--color-cyan)]/30 bg-[color:var(--color-cyan)]/10 px-4 py-3 text-sm text-[color:var(--color-gray-900)]">
+          <div className="rounded-2xl border border-(--color-cyan)/30 bg-(--color-cyan)/10 px-4 py-3 text-sm text-gray-900">
             <p className="font-semibold">First-time sign-in</p>
-            <p className="mt-1 text-[color:var(--color-gray-700)]">
+            <p className="mt-1 text-gray-700">
               We&apos;ll email a 6-digit code to <strong>{resolvedEmail}</strong>.
               After you verify it, you can create a password here for next time.
             </p>
@@ -419,7 +419,7 @@ export function SignInForm({ nextPath }: SignInFormProps) {
             type="button"
             disabled={isPending}
             onClick={resetToEmailStep}
-            className="text-sm font-medium text-[color:var(--color-indigo)] disabled:cursor-not-allowed disabled:opacity-60"
+            className="text-sm font-medium text-(--color-indigo) disabled:cursor-not-allowed disabled:opacity-60"
           >
             Use a different email
           </button>
@@ -428,7 +428,7 @@ export function SignInForm({ nextPath }: SignInFormProps) {
 
       {step === "password" ? (
         <form onSubmit={handlePasswordSubmit} className="grid gap-4">
-          <div className="rounded-2xl border border-[color:var(--color-indigo)]/15 bg-[color:var(--color-indigo-light)]/70 px-4 py-3 text-sm text-[color:var(--color-gray-900)]">
+          <div className="rounded-2xl border border-(--color-indigo)/15 bg-[color:var(--color-indigo-light)]/70 px-4 py-3 text-sm text-gray-900">
             Signing in as <strong>{resolvedEmail}</strong>
           </div>
 
@@ -446,7 +446,7 @@ export function SignInForm({ nextPath }: SignInFormProps) {
               required
               value={password}
               onChange={(event) => setPassword(event.target.value)}
-              className="field-shell w-full px-4 py-3 text-base outline-none ring-0 transition focus:border-[color:var(--color-indigo)]"
+              className="field-shell w-full px-4 py-3 text-base outline-none ring-0 transition focus:border-(--color-indigo)"
             />
           </div>
 
@@ -501,7 +501,7 @@ export function SignInForm({ nextPath }: SignInFormProps) {
                 setOtp(event.target.value.replace(/\D/g, "").slice(0, 6))
               }
               placeholder="123456"
-              className="field-shell w-full px-4 py-3 text-center text-base tracking-[0.35em] outline-none ring-0 transition focus:border-[color:var(--color-indigo)]"
+              className="field-shell w-full px-4 py-3 text-center text-base tracking-[0.35em] outline-none ring-0 transition focus:border-(--color-indigo)"
             />
           </div>
 
@@ -550,9 +550,9 @@ export function SignInForm({ nextPath }: SignInFormProps) {
 
       {step === "set-password" ? (
         <form onSubmit={handleSetPasswordSubmit} className="grid gap-4">
-          <div className="rounded-2xl border border-[color:var(--color-green)]/30 bg-[color:var(--color-green)]/10 px-4 py-3 text-sm text-[color:var(--color-gray-900)]">
+          <div className="rounded-2xl border border-(--color-green)/30 bg-(--color-green)/10 px-4 py-3 text-sm text-gray-900">
             <p className="font-semibold">Email verified</p>
-            <p className="mt-1 text-[color:var(--color-gray-700)]">
+            <p className="mt-1 text-gray-700">
               Create a password for <strong>{resolvedEmail}</strong> so you can
               sign in faster next time.
             </p>
@@ -573,7 +573,7 @@ export function SignInForm({ nextPath }: SignInFormProps) {
               required
               value={password}
               onChange={(event) => setPassword(event.target.value)}
-              className="field-shell w-full px-4 py-3 text-base outline-none ring-0 transition focus:border-[color:var(--color-indigo)]"
+              className="field-shell w-full px-4 py-3 text-base outline-none ring-0 transition focus:border-(--color-indigo)"
             />
           </div>
 
@@ -592,7 +592,7 @@ export function SignInForm({ nextPath }: SignInFormProps) {
               required
               value={confirmPassword}
               onChange={(event) => setConfirmPassword(event.target.value)}
-              className="field-shell w-full px-4 py-3 text-base outline-none ring-0 transition focus:border-[color:var(--color-indigo)]"
+              className="field-shell w-full px-4 py-3 text-base outline-none ring-0 transition focus:border-(--color-indigo)"
             />
           </div>
 
@@ -607,7 +607,7 @@ export function SignInForm({ nextPath }: SignInFormProps) {
       ) : null}
 
       {error ? (
-        <p className="rounded-2xl border border-[color:var(--color-orange)]/35 bg-[color:var(--color-orange)]/10 px-4 py-3 text-sm text-[color:var(--color-gray-900)]">
+        <p className="rounded-2xl border border-(--color-orange)/35 bg-(--color-orange)/10 px-4 py-3 text-sm text-gray-900">
           {error}
         </p>
       ) : null}

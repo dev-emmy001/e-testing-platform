@@ -10,7 +10,7 @@ import {
   formatPercentage,
   getStatusClasses,
 } from "@/utils/format";
-import { getProfileMetaLine } from "@/utils/profile";
+import { getProfileDisplayName, getProfileMetaLine } from "@/utils/profile";
 import {
   buildAdminTestTraineeSummaryRecords,
   buildTestLibraryQuestions,
@@ -459,7 +459,7 @@ export default async function AdminTestDetailPage({
                     className="rounded-[1.5rem] bg-white text-sm text-[color:var(--color-gray-900)]"
                   >
                     <td className="rounded-l-[1.5rem] px-3 py-4 font-medium">
-                      {profileEmailById.get(session.trainee_id) ?? "Unknown trainee"}
+                      {getProfileDisplayName(profileById.get(session.trainee_id))}
                     </td>
                     <td className="px-3 py-4">
                       <span className={`status-pill ${getStatusClasses(session.status)}`}>

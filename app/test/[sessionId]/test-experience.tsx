@@ -265,13 +265,15 @@ export function TestExperience({
         }
         disabled={isDisabled}
         aria-label={isPrevious ? "Previous question" : "Next question"}
-        className={`disabled:cursor-not-allowed disabled:opacity-50 ${
+        className={
           floating
-            ? `${
+            ? `disabled:cursor-not-allowed disabled:opacity-50 ${
                 isPrevious ? "secondary-button" : "primary-button"
-              } inline-flex h-12 w-12 items-center justify-center rounded-full text-sm shadow-[0_18px_35px_rgba(42,40,101,0.16)] sm:h-14 sm:min-w-[6.5rem] sm:w-auto sm:gap-2 sm:px-4`
-            : `${isPrevious ? "secondary-button" : "primary-button"} px-5 py-3 text-sm`
-        }`}
+              } inline-flex h-12 w-12 items-center justify-center rounded-full text-sm shadow-[0_18px_35px_rgba(42,40,101,0.16)] sm:h-14 sm:min-w-26 sm:w-auto sm:gap-2 sm:px-4`
+            : `disabled:cursor-not-allowed disabled:opacity-50 ${
+                isPrevious ? "secondary-button" : "primary-button"
+              } px-5 py-3 text-sm`
+        }
       >
         {isPrevious ? (
           <>
@@ -297,7 +299,7 @@ export function TestExperience({
       <div
         className={
           floating
-            ? "rounded-[1.5rem] border border-[rgba(196,196,216,0.55)] bg-[rgba(255,255,255,0.96)] px-4 py-3 text-center shadow-[0_20px_40px_rgba(42,40,101,0.16)] backdrop-blur-xl"
+            ? "rounded-3xl border border-[rgba(196,196,216,0.55)] bg-[rgba(255,255,255,0.96)] px-4 py-3 text-center shadow-[0_20px_40px_rgba(42,40,101,0.16)] backdrop-blur-xl"
             : "rounded-[1.75rem] bg-gray-100 px-6 py-4 text-center"
         }
       >
@@ -520,13 +522,13 @@ export function TestExperience({
                       onClick={() => jumpToQuestion(question.position)}
                       aria-label={`Question ${question.position}, ${question.categoryName}${isAnswered ? ", answered" : ", unanswered"}${isCurrentQuestion ? ", current" : ""}`}
                       title={`Question ${question.position} · ${question.categoryName}`}
-                      className={`h-4 w-4 rounded-[0.25rem] border transition-transform duration-150 hover:scale-105 ${
+                      className={`h-4 w-4 rounded-sm border transition-transform duration-150 hover:scale-105 ${
                         isCurrentQuestion
                           ? isAnswered
-                            ? "border-[color:var(--color-purple)] bg-[color:var(--color-purple)] shadow-[0_0_0_2px_rgba(127,86,217,0.2)]"
-                            : "border-[color:var(--color-purple)] bg-[rgba(127,86,217,0.18)] shadow-[0_0_0_2px_rgba(127,86,217,0.2)]"
+                            ? "border-(--color-purple) bg-(--color-purple) shadow-[0_0_0_2px_rgba(127,86,217,0.2)]"
+                            : "border-(--color-purple) bg-[rgba(127,86,217,0.18)] shadow-[0_0_0_2px_rgba(127,86,217,0.2)]"
                           : isAnswered
-                            ? "border-[color:var(--color-indigo)] bg-[color:var(--color-indigo)]"
+                            ? "border-(--color-indigo) bg-(--color-indigo)"
                             : "border-[rgba(196,196,216,0.8)] bg-[rgba(225,227,240,0.7)]"
                       }`}
                     >

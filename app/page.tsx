@@ -115,14 +115,23 @@ export default async function HomePage({ searchParams }: HomePageProps) {
             </p>
           </div>
 
-          <form action={signOutAction}>
-            <SubmitButton
-              pendingLabel="Signing out..."
-              className="primary-button inline-flex items-center justify-center px-5 py-3 text-sm"
+          <div className="flex flex-wrap gap-3">
+            <Link
+              href="/profile"
+              className="secondary-button inline-flex items-center justify-center px-5 py-3 text-sm"
             >
-              Sign out
-            </SubmitButton>
-          </form>
+              Edit profile
+            </Link>
+
+            <form action={signOutAction}>
+              <SubmitButton
+                pendingLabel="Signing out..."
+                className="primary-button inline-flex items-center justify-center px-5 py-3 text-sm"
+              >
+                Sign out
+              </SubmitButton>
+            </form>
+          </div>
         </div>
       </section>
 

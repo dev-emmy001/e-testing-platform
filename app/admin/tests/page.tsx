@@ -83,7 +83,7 @@ export default async function AdminTestsPage() {
       <FlashToast error={error} message={message} />
 
       <section className="surface-card rounded-4xl p-8">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div>
           <div>
             <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[color:var(--color-purple)]">
               Tests
@@ -95,21 +95,6 @@ export default async function AdminTestsPage() {
               Each test keeps its own timing, question pool, and trainee
               history. Open a test to manage the full details.
             </p>
-          </div>
-
-          <div className="flex flex-wrap gap-3">
-            <Link
-              href="/admin/tests/new"
-              className="primary-button inline-flex items-center justify-center px-5 py-3 text-sm"
-            >
-              Create test
-            </Link>
-            <Link
-              href="/admin/questions"
-              className="secondary-button inline-flex items-center justify-center px-5 py-3 text-sm"
-            >
-              Open question library
-            </Link>
           </div>
         </div>
 
@@ -131,6 +116,34 @@ export default async function AdminTestsPage() {
           {liveAttemptCount
             ? `${liveAttemptCount} live attempt${liveAttemptCount === 1 ? "" : "s"} currently in progress.`
             : "No live attempts are currently in progress."}
+        </div>
+      </section>
+
+      <section className="surface-card rounded-4xl p-6">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[color:var(--color-purple)]">
+              Actions
+            </p>
+            <h3 className="mt-2 text-2xl font-bold text-[color:var(--color-gray-900)]">
+              Create and manage test content
+            </h3>
+          </div>
+
+          <div className="flex flex-wrap gap-3">
+            <Link
+              href="/admin/tests/new"
+              className="primary-button inline-flex items-center justify-center px-5 py-3 text-sm"
+            >
+              Create test
+            </Link>
+            <Link
+              href="/admin/questions"
+              className="secondary-button inline-flex items-center justify-center px-5 py-3 text-sm"
+            >
+              Open question library
+            </Link>
+          </div>
         </div>
       </section>
 

@@ -62,6 +62,73 @@ function getErrorMessage(error: unknown, fallback: string) {
   return fallback;
 }
 
+function getProfileInput(formData: FormData) {
+  return {
+    name: normalizeProfileText(asString(formData, "name")),
+    track: normalizeProfileText(asString(formData, "track")),
+  };
+}
+
+function getProfileValidationError(
+  input: ReturnType<typeof getProfileInput>,
+  mode: "complete" | "update",
+) {
+  const continuation = mode === "complete" ? "before you continue" : "before you save";
+
+  if (!input.name && !input.track) {
+    return `Enter your name and track ${continuation}.`;
+  }
+
+  if (!input.name) {
+    return `Enter your name ${continuation}.`;
+  }
+
+  if (!input.track) {
+    return `Enter your track ${continuation}.`;
+  }
+
+  return null;
+}
+
+async function saveProfileForCurrentUser(params: {
+  name: string;
+  profile: Awaited<ReturnType<typeof requireUserContext>>["profile"];
+  track: string;
+  user: Awaited<ReturnType<typeof requireUserContext>>["user"];
+}) {
+  const email = params.user.email?.trim() || params.profile?.email?.trim();
+
+  if (!email) {
+    throw new Error("Your account email is unavailable. Sign out and try again.");
+  }
+
+  const admin = createAdminClient();
+  const { error } = await admin.from("profiles").upsert(
+    {
+      email,
+      id: params.user.id,
+      name: params.name,
+      role: params.profile?.role ?? "trainee",
+      track: params.track,
+    },
+    { onConflict: "id" },
+  );
+
+  if (error) {
+    throw error;
+  }
+}
+
+function revalidateProfilePaths() {
+  revalidatePath("/");
+  revalidatePath("/onboarding");
+  revalidatePath("/profile");
+  revalidatePath("/admin");
+  revalidatePath("/admin/results");
+  revalidatePath("/admin/tests");
+  revalidatePath("/admin/trainees");
+}
+
 function withFlash(
   path: string,
   params: FlashState,
@@ -372,51 +439,29 @@ export async function completeOnboardingAction(formData: FormData) {
   const { profile, user } = await requireUserContext("/onboarding", {
     allowIncompleteProfile: true,
   });
-  const name = normalizeProfileText(asString(formData, "name"));
-  const track = normalizeProfileText(asString(formData, "track"));
+  const input = getProfileInput(formData);
   const nextPath = asString(formData, "nextPath");
   const returnPath = getOnboardingPath(nextPath);
   let destination: RedirectDestination = withFlash(returnPath, {
     error: "Your profile could not be saved.",
   });
+  const validationError = getProfileValidationError(input, "complete");
 
-  if (!name && !track) {
+  if (validationError) {
     destination = withFlash(returnPath, {
-      error: "Enter your name and track before you continue.",
-    });
-  } else if (!name) {
-    destination = withFlash(returnPath, {
-      error: "Enter your name before you continue.",
-    });
-  } else if (!track) {
-    destination = withFlash(returnPath, {
-      error: "Enter your track before you continue.",
+      error: validationError,
     });
   } else {
     try {
-      const email = user.email?.trim() || profile?.email?.trim();
-
-      if (!email) {
-        throw new Error("Your account email is unavailable. Sign out and try again.");
-      }
-
-      const admin = createAdminClient();
-      const { error } = await admin.from("profiles").upsert(
-        {
-          email,
-          id: user.id,
-          name,
-          role: profile?.role ?? "trainee",
-          track,
-        },
-        { onConflict: "id" },
-      );
-
-      destination = error
-        ? withFlash(returnPath, { error: error.message })
-        : withFlash(getPostAuthRedirectPath(nextPath, profile?.role), {
-            message: `Welcome, ${name}.`,
-          });
+      await saveProfileForCurrentUser({
+        name: input.name,
+        profile,
+        track: input.track,
+        user,
+      });
+      destination = withFlash(getPostAuthRedirectPath(nextPath, profile?.role), {
+        message: `Welcome, ${input.name}.`,
+      });
     } catch (error) {
       destination = withFlash(returnPath, {
         error: getErrorMessage(error, "Your profile could not be saved."),
@@ -424,12 +469,43 @@ export async function completeOnboardingAction(formData: FormData) {
     }
   }
 
-  revalidatePath("/");
-  revalidatePath("/onboarding");
-  revalidatePath("/admin");
-  revalidatePath("/admin/results");
-  revalidatePath("/admin/tests");
-  revalidatePath("/admin/trainees");
+  revalidateProfilePaths();
+  await redirectWithDestination(destination);
+}
+
+export async function updateProfileAction(formData: FormData) {
+  const { profile, user } = await requireUserContext("/profile", {
+    allowIncompleteProfile: true,
+  });
+  const input = getProfileInput(formData);
+  let destination: RedirectDestination = withFlash("/profile", {
+    error: "Your profile could not be updated.",
+  });
+  const validationError = getProfileValidationError(input, "update");
+
+  if (validationError) {
+    destination = withFlash("/profile", {
+      error: validationError,
+    });
+  } else {
+    try {
+      await saveProfileForCurrentUser({
+        name: input.name,
+        profile,
+        track: input.track,
+        user,
+      });
+      destination = withFlash("/profile", {
+        message: "Your profile has been updated.",
+      });
+    } catch (error) {
+      destination = withFlash("/profile", {
+        error: getErrorMessage(error, "Your profile could not be updated."),
+      });
+    }
+  }
+
+  revalidateProfilePaths();
   await redirectWithDestination(destination);
 }
 
