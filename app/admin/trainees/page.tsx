@@ -1,19 +1,12 @@
-import { FlashBanner } from "@/components/flash-banner";
 import {
   AdminTraineesDashboard,
   type AdminTraineeRecord,
   type AdminTraineeSession,
 } from "@/components/admin-trainees-dashboard";
+import { FlashToast } from "@/components/flash-toast";
 import { requireAdminContext } from "@/utils/auth/session";
-import { getSearchParamValue } from "@/utils/format";
+import { readFlash } from "@/utils/flash";
 import type { SessionRecord, TestRecord } from "@/utils/test-sessions";
-
-type AdminTraineesPageProps = {
-  searchParams: Promise<{
-    error?: string | string[];
-    message?: string | string[];
-  }>;
-};
 
 type TraineeProfile = {
   email: string;
@@ -122,12 +115,8 @@ function buildTraineeRecords(
   });
 }
 
-export default async function AdminTraineesPage({
-  searchParams,
-}: AdminTraineesPageProps) {
-  const params = await searchParams;
-  const error = getSearchParamValue(params.error);
-  const message = getSearchParamValue(params.message);
+export default async function AdminTraineesPage() {
+  const { error, message } = await readFlash();
   const { supabase } = await requireAdminContext("/admin/trainees");
 
   const [{ data: trainees }, { data: tests }, { data: sessions }] =
@@ -160,6 +149,8 @@ export default async function AdminTraineesPage({
 
   return (
     <>
+      <FlashToast error={error} message={message} />
+
       <section className="surface-card rounded-4xl p-8">
         <h2 className="text-sm font-semibold uppercase tracking-[0.18em] text-(--color-purple)">
           Trainees
@@ -167,10 +158,6 @@ export default async function AdminTraineesPage({
         <h2 className="mt-2 text-4xl font-bold text-gray-900">
           Track completion progress and manage retakes
         </h2>
-
-        <div className="mt-6">
-          <FlashBanner error={error} message={message} />
-        </div>
       </section>
 
       <AdminTraineesDashboard trainees={traineeRecords} />

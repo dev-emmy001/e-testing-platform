@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { DM_Sans, Lato } from "next/font/google";
+import { AppToaster } from "@/components/app-toaster";
 import "./globals.css";
 
 const display = Lato({
@@ -33,7 +34,10 @@ export default function RootLayout({
       lang="en"
       className={`${display.variable} ${bodyFont.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col">{children}</body>
+      <body className="min-h-full flex flex-col">
+        {children}
+        <AppToaster />
+      </body>
     </html>
   );
 }

@@ -1,30 +1,21 @@
 import Link from "next/link";
-import { FlashBanner } from "@/components/flash-banner";
+import { FlashToast } from "@/components/flash-toast";
 import { requireAdminContext } from "@/utils/auth/session";
+import { readFlash } from "@/utils/flash";
 import {
   formatDateTime,
   formatPercentage,
-  getSearchParamValue,
   getStatusClasses,
 } from "@/utils/format";
 import type { SessionRecord, TestRecord } from "@/utils/test-sessions";
-
-type AdminResultsPageProps = {
-  searchParams: Promise<{
-    error?: string | string[];
-    message?: string | string[];
-  }>;
-};
 
 type ProfileRow = {
   email: string;
   id: string;
 };
 
-export default async function AdminResultsPage({ searchParams }: AdminResultsPageProps) {
-  const params = await searchParams;
-  const error = getSearchParamValue(params.error);
-  const message = getSearchParamValue(params.message);
+export default async function AdminResultsPage() {
+  const { error, message } = await readFlash();
   const { supabase } = await requireAdminContext("/admin/results");
 
   const [{ data: tests }, { data: sessions }, { data: profiles }] = await Promise.all([
@@ -51,6 +42,8 @@ export default async function AdminResultsPage({ searchParams }: AdminResultsPag
 
   return (
     <>
+      <FlashToast error={error} message={message} />
+
       <section className="surface-card rounded-[2rem] p-8">
         <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[color:var(--color-purple)]">
           Results and export
@@ -62,10 +55,6 @@ export default async function AdminResultsPage({ searchParams }: AdminResultsPag
           Each export includes the session record plus answer-level detail for the selected
           test.
         </p>
-
-        <div className="mt-6">
-          <FlashBanner error={error} message={message} />
-        </div>
 
         <div className="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {(tests ?? []).map((test) => (

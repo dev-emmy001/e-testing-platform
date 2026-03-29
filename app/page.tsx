@@ -1,10 +1,11 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { FlashBanner } from "@/components/flash-banner";
+import { FlashToast } from "@/components/flash-toast";
 import { SubmitButton } from "@/components/submit-button";
 import { SignInForm } from "@/components/sign-in-form";
 import { signOutAction, startTestSessionAction } from "@/app/actions";
 import { getCurrentUserContext } from "@/utils/auth/session";
+import { readFlash } from "@/utils/flash";
 import {
   formatDateTime,
   getRoleClasses,
@@ -16,17 +17,16 @@ import Image from "next/image";
 
 type HomePageProps = {
   searchParams: Promise<{
-    error?: string | string[];
-    message?: string | string[];
     view?: string | string[];
     next?: string | string[];
   }>;
 };
 
 export default async function HomePage({ searchParams }: HomePageProps) {
-  const params = await searchParams;
-  const error = getSearchParamValue(params.error);
-  const message = getSearchParamValue(params.message);
+  const [params, { error, message }] = await Promise.all([
+    searchParams,
+    readFlash(),
+  ]);
   const view = getSearchParamValue(params.view);
   const nextPath = getSearchParamValue(params.next);
   const { profile, supabase, user } = await getCurrentUserContext();
@@ -34,6 +34,8 @@ export default async function HomePage({ searchParams }: HomePageProps) {
   if (!user) {
     return (
       <main className="mx-auto flex min-h-screen w-full max-w-6xl flex-col justify-center px-6 py-12 lg:px-8">
+        <FlashToast error={error} message={message} />
+
         <div className="grid gap-12 lg:items-center text-center">
           <section className="flex flex-col items-center">
             <Image
@@ -56,10 +58,6 @@ export default async function HomePage({ searchParams }: HomePageProps) {
           <section className="surface-card rounded-4xl p-8 lg:p-12 max-w-md mx-auto">
             <div>
               <SignInForm nextPath={nextPath} />
-            </div>
-
-            <div className="mt-8">
-              <FlashBanner error={error} message={message} />
             </div>
 
             <p className="mt-8 text-xs leading-5 text-gray-500">
@@ -105,6 +103,8 @@ export default async function HomePage({ searchParams }: HomePageProps) {
 
   return (
     <main className="mx-auto w-full max-w-6xl px-6 py-10 lg:px-8">
+      <FlashToast error={error} message={message} />
+
       <section className="surface-card rounded-4xl p-8">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
           <div>
@@ -141,10 +141,6 @@ export default async function HomePage({ searchParams }: HomePageProps) {
               Sign out
             </SubmitButton>
           </form>
-        </div>
-
-        <div className="mt-6">
-          <FlashBanner error={error} message={message} />
         </div>
       </section>
 

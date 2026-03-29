@@ -1,13 +1,13 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { FlashBanner } from "@/components/flash-banner";
+import { FlashToast } from "@/components/flash-toast";
 import { TestEditorForm } from "@/components/test-editor-form";
 import { updateTestAction } from "@/app/actions";
 import { requireAdminContext } from "@/utils/auth/session";
+import { readFlash } from "@/utils/flash";
 import {
   formatDateTime,
   formatPercentage,
-  getSearchParamValue,
   getStatusClasses,
 } from "@/utils/format";
 import {
@@ -26,10 +26,6 @@ import type { SessionRecord, TestRecord } from "@/utils/test-sessions";
 type AdminTestDetailPageProps = {
   params: Promise<{
     testId: string;
-  }>;
-  searchParams: Promise<{
-    error?: string | string[];
-    message?: string | string[];
   }>;
 };
 
@@ -57,14 +53,11 @@ function getScoreLabel(session: SessionRecord) {
 
 export default async function AdminTestDetailPage({
   params,
-  searchParams,
 }: AdminTestDetailPageProps) {
-  const [{ testId }, resolvedSearchParams] = await Promise.all([
+  const [{ testId }, { error, message }] = await Promise.all([
     params,
-    searchParams,
+    readFlash(),
   ]);
-  const error = getSearchParamValue(resolvedSearchParams.error);
-  const message = getSearchParamValue(resolvedSearchParams.message);
   const { supabase } = await requireAdminContext(`/admin/tests/${testId}`);
 
   const [
@@ -186,6 +179,8 @@ export default async function AdminTestDetailPage({
 
   return (
     <>
+      <FlashToast error={error} message={message} />
+
       <section className="surface-card rounded-4xl p-8">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
@@ -243,10 +238,6 @@ export default async function AdminTestDetailPage({
               Export CSV
             </Link>
           </div>
-        </div>
-
-        <div className="mt-6">
-          <FlashBanner error={error} message={message} />
         </div>
 
         <div className="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-4">

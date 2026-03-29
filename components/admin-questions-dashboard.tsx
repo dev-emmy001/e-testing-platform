@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useDeferredValue, useState } from "react";
 import { useRouter } from "next/navigation";
-import { FlashBanner } from "@/components/flash-banner";
 import { QuestionEditorForm } from "@/components/question-editor-form";
 import { QuestionLibraryDrawer } from "@/components/question-library-drawer";
 import { SubmitButton } from "@/components/submit-button";
@@ -21,10 +20,8 @@ type AdminQuestionsDashboardProps = {
   categories: QuestionCategoryRecord[];
   createQuestionAction: QuestionAction;
   deleteQuestionAction: QuestionAction;
-  error?: string | null;
   initialDrawerMode: "closed" | "detail" | "new";
   initialSelectedQuestionId?: string | null;
-  message?: string | null;
   questions: QuestionLibraryEntryRecord[];
   updateQuestionAction: QuestionAction;
 };
@@ -163,10 +160,8 @@ export function AdminQuestionsDashboard({
   categories,
   createQuestionAction,
   deleteQuestionAction,
-  error,
   initialDrawerMode,
   initialSelectedQuestionId,
-  message,
   questions,
   updateQuestionAction,
 }: AdminQuestionsDashboardProps) {
@@ -406,8 +401,6 @@ export function AdminQuestionsDashboard({
           onClose={closeDrawer}
         >
           <div className="space-y-4">
-            <FlashBanner error={error} message={message} />
-
             <article className="rounded-[1.75rem] bg-gray-100 p-5">
               <QuestionEditorForm
                 action={createQuestionAction}
@@ -443,8 +436,6 @@ export function AdminQuestionsDashboard({
           }
         >
           <div className="space-y-4">
-            <FlashBanner error={error} message={message} />
-
             <article className="rounded-[1.75rem] bg-gray-100 p-5">
               <QuestionEditorForm
                 action={updateQuestionAction}

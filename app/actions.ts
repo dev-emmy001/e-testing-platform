@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireAdminContext, requireUserContext } from "@/utils/auth/session";
+import { clearFlash, setFlash, type FlashState } from "@/utils/flash";
 import {
   coerceQuestionType,
   getStoredQuestionTitle,
@@ -57,23 +58,23 @@ function getErrorMessage(error: unknown, fallback: string) {
 
 function withFlash(
   path: string,
-  params: {
-    error?: string;
-    message?: string;
-  },
+  params: FlashState,
 ) {
-  const query = new URLSearchParams();
+  return {
+    flash: normalizeFlashState(params),
+    path,
+  };
+}
 
-  if (params.error) {
-    query.set("error", params.error);
+function normalizeFlashState(params: FlashState) {
+  const error = params.error?.trim();
+  const message = params.message?.trim();
+
+  if (!error && !message) {
+    return undefined;
   }
 
-  if (params.message) {
-    query.set("message", params.message);
-  }
-
-  const queryString = query.toString();
-  return queryString ? `${path}?${queryString}` : path;
+  return { error, message };
 }
 
 function withQuestionLibraryState(params: {
@@ -82,13 +83,7 @@ function withQuestionLibraryState(params: {
   message?: string;
   questionId?: string;
 }) {
-  const destination = new URL(
-    withFlash("/admin/questions", {
-      error: params.error,
-      message: params.message,
-    }),
-    "http://localhost",
-  );
+  const destination = new URL("/admin/questions", "http://localhost");
 
   if (params.drawer) {
     destination.searchParams.set("drawer", params.drawer);
@@ -98,7 +93,30 @@ function withQuestionLibraryState(params: {
     destination.searchParams.set("questionId", params.questionId);
   }
 
-  return `${destination.pathname}${destination.search}`;
+  return {
+    flash: normalizeFlashState({
+      error: params.error,
+      message: params.message,
+    }),
+    path: `${destination.pathname}${destination.search}`,
+  };
+}
+
+type RedirectDestination =
+  | string
+  | {
+      flash?: FlashState;
+      path: string;
+    };
+
+async function redirectWithDestination(destination: RedirectDestination) {
+  await clearFlash();
+
+  if (typeof destination !== "string" && destination.flash) {
+    await setFlash(destination.flash);
+  }
+
+  redirect(typeof destination === "string" ? destination : destination.path);
 }
 
 function getQuestionOptionInputs(formData: FormData) {
@@ -339,13 +357,17 @@ async function deleteTraineeSessions(
 export async function signOutAction() {
   const supabase = await createClient();
   await supabase.auth.signOut();
-  redirect(withFlash("/", { message: "You have been signed out." }));
+  await redirectWithDestination(
+    withFlash("/", { message: "You have been signed out." }),
+  );
 }
 
 export async function startTestSessionAction(formData: FormData) {
   const { user } = await requireUserContext("/");
   const testId = asString(formData, "testId");
-  let destination = withFlash("/", { error: "Choose a test to continue." });
+  let destination: RedirectDestination = withFlash("/", {
+    error: "Choose a test to continue.",
+  });
 
   if (testId) {
     try {
@@ -369,7 +391,7 @@ export async function startTestSessionAction(formData: FormData) {
   }
 
   revalidatePath("/");
-  redirect(destination);
+  await redirectWithDestination(destination);
 }
 
 export async function createTestAction(formData: FormData) {
@@ -431,7 +453,7 @@ export async function createTestAction(formData: FormData) {
   revalidatePath("/admin");
   revalidatePath("/admin/tests");
   revalidatePath("/admin/results");
-  redirect(destination);
+  await redirectWithDestination(destination);
 }
 
 export async function updateTestAction(formData: FormData) {
@@ -491,7 +513,7 @@ export async function updateTestAction(formData: FormData) {
   revalidatePath("/admin/tests");
   revalidatePath(detailPath);
   revalidatePath("/admin/results");
-  redirect(destination);
+  await redirectWithDestination(destination);
 }
 
 export async function createQuestionCategoryAction(formData: FormData) {
@@ -524,7 +546,7 @@ export async function createQuestionCategoryAction(formData: FormData) {
 
   revalidatePath("/admin/questions");
   revalidatePath("/admin/tests");
-  redirect(destination);
+  await redirectWithDestination(destination);
 }
 
 export async function createQuestionAction(formData: FormData) {
@@ -588,7 +610,7 @@ export async function createQuestionAction(formData: FormData) {
   revalidatePath("/admin");
   revalidatePath("/admin/questions");
   revalidatePath("/admin/tests");
-  redirect(destination);
+  await redirectWithDestination(destination);
 }
 
 export async function updateQuestionAction(formData: FormData) {
@@ -643,7 +665,7 @@ export async function updateQuestionAction(formData: FormData) {
   revalidatePath("/admin");
   revalidatePath("/admin/questions");
   revalidatePath("/admin/tests");
-  redirect(destination);
+  await redirectWithDestination(destination);
 }
 
 export async function deleteQuestionAction(formData: FormData) {
@@ -675,7 +697,7 @@ export async function deleteQuestionAction(formData: FormData) {
   revalidatePath("/admin");
   revalidatePath("/admin/questions");
   revalidatePath("/admin/tests");
-  redirect(destination);
+  await redirectWithDestination(destination);
 }
 
 export async function grantRetakeAction(formData: FormData) {
@@ -712,7 +734,7 @@ export async function grantRetakeAction(formData: FormData) {
 
   revalidatePath("/admin");
   revalidatePath("/admin/trainees");
-  redirect(destination);
+  await redirectWithDestination(destination);
 }
 
 export async function deleteTraineeAction(formData: FormData) {
@@ -725,14 +747,14 @@ export async function deleteTraineeAction(formData: FormData) {
   });
 
   if (!traineeId) {
-    redirect(destination);
+    await redirectWithDestination(destination);
   }
 
   if (traineeId === user.id || traineeId === profile.id) {
     destination = withFlash("/admin/trainees", {
       error: "You cannot delete the account you are currently using.",
     });
-    redirect(destination);
+    await redirectWithDestination(destination);
   }
 
   try {
@@ -755,8 +777,8 @@ export async function deleteTraineeAction(formData: FormData) {
         error: "Only trainee profiles can be deleted here.",
       });
     } else {
-      await deleteAuthUserIfPresent(supabase, trainee.id);
       await deleteTraineeSessions(supabase, trainee.id);
+      await deleteAuthUserIfPresent(supabase, trainee.id);
 
       const { error: deleteProfileError } = await supabase
         .from("profiles")
@@ -783,5 +805,5 @@ export async function deleteTraineeAction(formData: FormData) {
   revalidatePath("/admin/trainees");
   revalidatePath("/admin/results");
   revalidatePath("/admin/tests");
-  redirect(destination);
+  await redirectWithDestination(destination);
 }

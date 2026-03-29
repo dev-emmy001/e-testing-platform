@@ -1,30 +1,19 @@
 import Link from "next/link";
-import { FlashBanner } from "@/components/flash-banner";
+import { FlashToast } from "@/components/flash-toast";
 import { TestEditorForm } from "@/components/test-editor-form";
 import { createTestAction } from "@/app/actions";
 import { requireAdminContext } from "@/utils/auth/session";
-import { getSearchParamValue } from "@/utils/format";
 import { buildTestLibraryQuestions } from "@/utils/admin-tests";
+import { readFlash } from "@/utils/flash";
 import type { QuestionCategoryRecord, QuestionRecord, TestQuestionLinkRecord } from "@/utils/question-library";
-
-type NewAdminTestPageProps = {
-  searchParams: Promise<{
-    error?: string | string[];
-    message?: string | string[];
-  }>;
-};
 
 type TestLibraryQuestionRecord = Pick<
   QuestionRecord,
   "category_id" | "id" | "question_text" | "title" | "type"
 >;
 
-export default async function NewAdminTestPage({
-  searchParams,
-}: NewAdminTestPageProps) {
-  const params = await searchParams;
-  const error = getSearchParamValue(params.error);
-  const message = getSearchParamValue(params.message);
+export default async function NewAdminTestPage() {
+  const { error, message } = await readFlash();
   const { supabase } = await requireAdminContext("/admin/tests/new");
 
   const [{ data: categories }, { data: questions }, { data: testQuestions }] =
@@ -53,6 +42,8 @@ export default async function NewAdminTestPage({
 
   return (
     <>
+      <FlashToast error={error} message={message} />
+
       <section className="surface-card rounded-4xl p-8">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
@@ -82,10 +73,6 @@ export default async function NewAdminTestPage({
           >
             Manage questions
           </Link>
-        </div>
-
-        <div className="mt-6">
-          <FlashBanner error={error} message={message} />
         </div>
 
         <div className="mt-8 grid gap-4 md:grid-cols-3">

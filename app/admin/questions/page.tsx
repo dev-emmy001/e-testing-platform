@@ -3,9 +3,10 @@ import {
   deleteQuestionAction,
   updateQuestionAction,
 } from "@/app/actions";
-import { FlashBanner } from "@/components/flash-banner";
 import { AdminQuestionsDashboard } from "@/components/admin-questions-dashboard";
+import { FlashToast } from "@/components/flash-toast";
 import { requireAdminContext } from "@/utils/auth/session";
+import { readFlash } from "@/utils/flash";
 import { getSearchParamValue } from "@/utils/format";
 import {
   buildQuestionSearchText,
@@ -21,8 +22,6 @@ import {
 type AdminQuestionsPageProps = {
   searchParams: Promise<{
     drawer?: string | string[];
-    error?: string | string[];
-    message?: string | string[];
     questionId?: string | string[];
   }>;
 };
@@ -32,10 +31,11 @@ type LinkedTestRecord = QuestionLinkedTestRecord;
 export default async function AdminQuestionsPage({
   searchParams,
 }: AdminQuestionsPageProps) {
-  const params = await searchParams;
+  const [params, { error, message }] = await Promise.all([
+    searchParams,
+    readFlash(),
+  ]);
   const drawer = getSearchParamValue(params.drawer);
-  const error = getSearchParamValue(params.error);
-  const message = getSearchParamValue(params.message);
   const requestedQuestionId = getSearchParamValue(params.questionId);
   const { supabase } = await requireAdminContext("/admin/questions");
 
@@ -134,6 +134,8 @@ export default async function AdminQuestionsPage({
 
   return (
     <>
+      <FlashToast error={error} message={message} />
+
       <section className="surface-card rounded-4xl p-8">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
@@ -146,9 +148,6 @@ export default async function AdminQuestionsPage({
           </div>
         </div>
 
-        <div className="mt-6">
-          <FlashBanner error={error} message={message} />
-        </div>
       </section>
 
       <AdminQuestionsDashboard
@@ -156,10 +155,8 @@ export default async function AdminQuestionsPage({
         categories={categoryRows}
         createQuestionAction={createQuestionAction}
         deleteQuestionAction={deleteQuestionAction}
-        error={error}
         initialDrawerMode={initialDrawerMode}
         initialSelectedQuestionId={initialSelectedQuestionId}
-        message={message}
         questions={questionsWithDetails}
         updateQuestionAction={updateQuestionAction}
       />
