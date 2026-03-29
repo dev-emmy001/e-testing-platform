@@ -55,11 +55,22 @@ type LegacyQuestionRecord = {
 };
 
 type QuestionRecord = {
+  category_id?: string | null;
   id: string;
   type: "multiple_choice" | "true_false";
   question_text: string;
   options: unknown;
   correct_answer: string;
+};
+
+type QuestionCategoryLookupRecord = {
+  category_id: string | null;
+  id: string;
+};
+
+type QuestionCategoryRecord = {
+  id: string;
+  name: string;
 };
 
 type AnswerRecord = {
@@ -73,6 +84,7 @@ export type SessionExperience = {
   session: SessionRecord;
   test: Pick<TestRecord, "id" | "title" | "time_limit_mins" | "questions_per_attempt"> | null;
   questions: Array<{
+    categoryName: string;
     questionId: string;
     position: number;
     type: "multiple_choice" | "true_false";
@@ -216,6 +228,67 @@ async function getQuestionsByIds(
   }
 
   return questions ?? [];
+}
+
+async function getQuestionCategoryNameByQuestionId(
+  admin: ReturnType<typeof createAdminClient>,
+  questionIds: string[],
+) {
+  const questionCategoryNameById = new Map<string, string>();
+
+  if (!questionIds.length) {
+    return questionCategoryNameById;
+  }
+
+  const { data: questions, error: questionsError } = await admin
+    .from("questions")
+    .select("id, category_id")
+    .in("id", questionIds)
+    .returns<QuestionCategoryLookupRecord[]>();
+
+  if (questionsError) {
+    if (isMissingSchemaEntityError(questionsError)) {
+      return questionCategoryNameById;
+    }
+
+    throw questionsError;
+  }
+
+  const categoryIds = Array.from(
+    new Set(
+      (questions ?? [])
+        .map((question) => question.category_id)
+        .filter((categoryId): categoryId is string => Boolean(categoryId)),
+    ),
+  );
+  const categoryNameById = new Map<string, string>();
+
+  if (categoryIds.length) {
+    const { data: categories, error: categoriesError } = await admin
+      .from("question_categories")
+      .select("id, name")
+      .in("id", categoryIds)
+      .returns<QuestionCategoryRecord[]>();
+
+    if (categoriesError) {
+      if (!isMissingSchemaEntityError(categoriesError)) {
+        throw categoriesError;
+      }
+    } else {
+      for (const category of categories ?? []) {
+        categoryNameById.set(category.id, category.name);
+      }
+    }
+  }
+
+  for (const question of questions ?? []) {
+    questionCategoryNameById.set(
+      question.id,
+      categoryNameById.get(question.category_id ?? "") ?? "Uncategorized",
+    );
+  }
+
+  return questionCategoryNameById;
 }
 
 async function getSessionHistoryForUser(
@@ -732,6 +805,10 @@ export async function loadSessionExperienceForUser(userId: string, sessionId: st
   }
 
   const sessionQuestions = await getSessionQuestions(sessionId);
+  const questionCategoryNameById = await getQuestionCategoryNameByQuestionId(
+    admin,
+    sessionQuestions.map((question) => question.question_id),
+  );
 
   const { data: answers, error: answersError } = await admin
     .from("answers")
@@ -752,6 +829,8 @@ export async function loadSessionExperienceForUser(userId: string, sessionId: st
       const answer = answersByQuestionId.get(item.question_id);
 
       return {
+        categoryName:
+          questionCategoryNameById.get(item.question_id) ?? "Uncategorized",
         questionId: item.question_id,
         position: item.position,
         type: item.question_type,

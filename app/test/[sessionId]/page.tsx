@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { requireUserContext } from "@/utils/auth/session";
@@ -20,6 +21,7 @@ export default async function TestPage({ params }: TestPageProps) {
   const experience = await loadSessionExperienceForUser(user.id, sessionId);
   const profileDisplayName = getProfileDisplayName(profile);
   const profileMetaLine = getProfileMetaLine(profile);
+  const optionShuffleSeed = randomUUID();
 
   if (!experience) {
     redirect("/");
@@ -68,6 +70,7 @@ export default async function TestPage({ params }: TestPageProps) {
           sessionId={sessionId}
           testTitle={experience.test?.title ?? "Assessment"}
           expiresAt={experience.session.expires_at}
+          optionShuffleSeed={optionShuffleSeed}
           questions={experience.questions.map((question) => ({
             ...question,
             selectedAnswer: question.selectedAnswer,

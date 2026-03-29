@@ -3,22 +3,73 @@
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 import { formatCountdown } from "@/utils/format";
 
+type ExperienceQuestion = {
+  categoryName: string;
+  questionId: string;
+  position: number;
+  type: "multiple_choice" | "true_false";
+  questionText: string;
+  options: string[];
+  selectedAnswer: string | null;
+};
+
 type TestExperienceProps = {
   expiresAt: string;
-  questions: Array<{
-    questionId: string;
-    position: number;
-    type: "multiple_choice" | "true_false";
-    questionText: string;
-    options: string[];
-    selectedAnswer: string | null;
-  }>;
+  optionShuffleSeed: string;
+  questions: ExperienceQuestion[];
   sessionId: string;
   testTitle: string;
 };
 
+function hashSeed(value: string) {
+  let hash = 2166136261;
+
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+
+  return hash >>> 0;
+}
+
+function createSeededRandom(seed: number) {
+  return function nextRandom() {
+    let next = seed + 0x6d2b79f5;
+    seed = next;
+    next = Math.imul(next ^ (next >>> 15), next | 1);
+    next ^= next + Math.imul(next ^ (next >>> 7), next | 61);
+
+    return ((next ^ (next >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function shuffleQuestionOptions(
+  questions: ExperienceQuestion[],
+  optionShuffleSeed: string,
+) {
+  return Object.fromEntries(
+    questions.map((question) => {
+      const shuffledOptions = [...question.options];
+      const random = createSeededRandom(
+        hashSeed(`${optionShuffleSeed}:${question.questionId}`),
+      );
+
+      for (let index = shuffledOptions.length - 1; index > 0; index -= 1) {
+        const swapIndex = Math.floor(random() * (index + 1));
+        [shuffledOptions[index], shuffledOptions[swapIndex]] = [
+          shuffledOptions[swapIndex],
+          shuffledOptions[index],
+        ];
+      }
+
+      return [question.questionId, shuffledOptions];
+    }),
+  );
+}
+
 export function TestExperience({
   expiresAt,
+  optionShuffleSeed,
   questions,
   sessionId,
   testTitle,
@@ -27,6 +78,11 @@ export function TestExperience({
   const hasSubmittedRef = useRef(false);
   const questionSwapTimeoutRef = useRef<number | null>(null);
   const questionRevealTimeoutRef = useRef<number | null>(null);
+  const questionContentRef = useRef<HTMLDivElement>(null);
+  const timerCardRef = useRef<HTMLDivElement>(null);
+  const [questionOptionsById] = useState<Record<string, string[]>>(() =>
+    shuffleQuestionOptions(questions, optionShuffleSeed),
+  );
   const [answers, setAnswers] = useState<Record<string, string>>(() =>
     Object.fromEntries(
       questions
@@ -45,6 +101,9 @@ export function TestExperience({
   >("idle");
   const [activeQuestionIndex, setActiveQuestionIndex] = useState(0);
   const [isQuestionVisible, setIsQuestionVisible] = useState(true);
+  const [isFloatingQuestionNavigationVisible, setIsFloatingQuestionNavigationVisible] =
+    useState(false);
+  const [isFloatingTimerVisible, setIsFloatingTimerVisible] = useState(false);
   const [jumpTarget, setJumpTarget] = useState("");
   const [jumpError, setJumpError] = useState("");
 
@@ -120,6 +179,49 @@ export function TestExperience({
     setJumpTarget(currentQuestion ? String(currentQuestion.position) : "");
   }, [activeQuestionIndex, questions]);
 
+  useEffect(() => {
+    const timerCardElement = timerCardRef.current;
+
+    if (!timerCardElement || typeof IntersectionObserver === "undefined") {
+      return;
+    }
+
+    const observer = new IntersectionObserver(([entry]) => {
+      setIsFloatingTimerVisible(!entry.isIntersecting);
+    });
+
+    observer.observe(timerCardElement);
+
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    const questionContentElement = questionContentRef.current;
+
+    if (!questionContentElement) {
+      setIsFloatingQuestionNavigationVisible(false);
+      return;
+    }
+
+    if (typeof IntersectionObserver === "undefined") {
+      setIsFloatingQuestionNavigationVisible(true);
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        setIsFloatingQuestionNavigationVisible(entry.isIntersecting);
+      },
+      {
+        threshold: 0.15,
+      },
+    );
+
+    observer.observe(questionContentElement);
+
+    return () => observer.disconnect();
+  }, [activeQuestionIndex, questions]);
+
   const answeredCount = Object.values(answers).filter(Boolean).length;
   const progressPercent = questions.length
     ? Math.round((answeredCount / questions.length) * 100)
@@ -135,19 +237,83 @@ export function TestExperience({
     ? Math.max(...questions.map((question) => question.position))
     : 0;
   const activeQuestion = questions[activeQuestionIndex];
+  const activeQuestionOptions = activeQuestion
+    ? questionOptionsById[activeQuestion.questionId] ?? activeQuestion.options
+    : [];
   const isLastQuestion = activeQuestionIndex === questions.length - 1;
   const activeQuestionAnswered = activeQuestion
     ? Boolean(answers[activeQuestion.questionId])
     : false;
 
-  function renderTimerCard() {
+  function renderQuestionNavigationButton({
+    direction,
+    floating = false,
+  }: {
+    direction: "next" | "previous";
+    floating?: boolean;
+  }) {
+    const isPrevious = direction === "previous";
+    const isDisabled = isPrevious ? activeQuestionIndex === 0 : isLastQuestion;
+
     return (
-      <div className="rounded-[1.75rem] bg-gray-100 px-6 py-4 text-center">
-        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-500">
+      <button
+        type="button"
+        onClick={() =>
+          setActiveQuestion(
+            activeQuestionIndex + (isPrevious ? -1 : 1),
+          )
+        }
+        disabled={isDisabled}
+        aria-label={isPrevious ? "Previous question" : "Next question"}
+        className={`disabled:cursor-not-allowed disabled:opacity-50 ${
+          floating
+            ? `${
+                isPrevious ? "secondary-button" : "primary-button"
+              } inline-flex h-12 w-12 items-center justify-center rounded-full text-sm shadow-[0_18px_35px_rgba(42,40,101,0.16)] sm:h-14 sm:min-w-[6.5rem] sm:w-auto sm:gap-2 sm:px-4`
+            : `${isPrevious ? "secondary-button" : "primary-button"} px-5 py-3 text-sm`
+        }`}
+      >
+        {isPrevious ? (
+          <>
+            <span aria-hidden="true" className="text-base leading-none">
+              ←
+            </span>
+            <span className="hidden sm:inline">Previous</span>
+          </>
+        ) : (
+          <>
+            <span className="hidden sm:inline">Next</span>
+            <span aria-hidden="true" className="text-base leading-none">
+              →
+            </span>
+          </>
+        )}
+      </button>
+    );
+  }
+
+  function renderTimerCard({ floating = false }: { floating?: boolean } = {}) {
+    return (
+      <div
+        className={
+          floating
+            ? "rounded-[1.5rem] border border-[rgba(196,196,216,0.55)] bg-[rgba(255,255,255,0.96)] px-4 py-3 text-center shadow-[0_20px_40px_rgba(42,40,101,0.16)] backdrop-blur-xl"
+            : "rounded-[1.75rem] bg-gray-100 px-6 py-4 text-center"
+        }
+      >
+        <p
+          className={
+            floating
+              ? "text-[0.65rem] font-semibold uppercase tracking-[0.22em] text-gray-500"
+              : "text-xs font-semibold uppercase tracking-[0.2em] text-gray-500"
+          }
+        >
           Time left
         </p>
         <p className={`mt-2 font-mono font-bold tracking-tight ${timerTone}`}>
-          <span className="text-4xl">{countdownLabel}</span>
+          <span className={floating ? "text-2xl sm:text-3xl" : "text-4xl"}>
+            {countdownLabel}
+          </span>
         </p>
       </div>
     );
@@ -226,6 +392,32 @@ export function TestExperience({
 
   return (
     <div className="space-y-6">
+      {isFloatingTimerVisible ? (
+        <div
+          aria-hidden="true"
+          className="pointer-events-none fixed right-3 top-3 z-50 sm:right-4 sm:top-4 lg:right-8"
+        >
+          {renderTimerCard({ floating: true })}
+        </div>
+      ) : null}
+
+      {activeQuestion && isFloatingQuestionNavigationVisible ? (
+        <>
+          <div className="fixed left-2 top-1/2 z-40 -translate-y-1/2 sm:left-3 xl:left-6">
+            {renderQuestionNavigationButton({
+              direction: "previous",
+              floating: true,
+            })}
+          </div>
+          <div className="fixed right-2 top-1/2 z-40 -translate-y-1/2 sm:right-3 xl:right-6">
+            {renderQuestionNavigationButton({
+              direction: "next",
+              floating: true,
+            })}
+          </div>
+        </>
+      ) : null}
+
       <section className="surface-card rounded-4xl p-6 lg:p-8">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
@@ -241,7 +433,7 @@ export function TestExperience({
             </p>
           </div>
 
-          <div>{renderTimerCard()}</div>
+          <div ref={timerCardRef}>{renderTimerCard()}</div>
         </div>
 
         <div className="mt-6 grid gap-4 lg:grid-cols-[1fr_auto] lg:items-end">
@@ -293,23 +485,12 @@ export function TestExperience({
 
         {activeQuestion ? (
           <section className="surface-card overflow-hidden rounded-4xl">
-            <div className="flex flex-wrap items-start justify-between gap-4 border-b border-[rgba(196,196,216,0.5)] px-6 py-5">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-(--color-purple)">
-                  Question {activeQuestion.position} of {questions.length}
-                </p>
-                <p className="mt-2 text-sm text-gray-600">
-                  {activeQuestionAnswered
-                    ? "Answer saved for this question."
-                    : "Select an answer, then continue when you are ready."}
-                </p>
-              </div>
-
-              <span className="status-pill bg-(--color-indigo-light) text-(--color-indigo)">
-                {activeQuestion.type === "true_false"
-                  ? "True / False"
-                  : "Multiple choice"}
-              </span>
+            <div className="border-b border-[rgba(196,196,216,0.5)] px-6 py-5">
+              <p className="text-sm text-gray-600">
+                {activeQuestionAnswered
+                  ? "Answer saved for this question."
+                  : "Select an answer, then continue when you are ready."}
+              </p>
             </div>
 
             <section className="border-b border-[rgba(196,196,216,0.5)] bg-[rgba(245,246,255,0.7)] px-6 py-5">
@@ -337,8 +518,8 @@ export function TestExperience({
                       key={question.questionId}
                       type="button"
                       onClick={() => jumpToQuestion(question.position)}
-                      aria-label={`Question ${question.position}${isAnswered ? ", answered" : ", unanswered"}${isCurrentQuestion ? ", current" : ""}`}
-                      title={`Question ${question.position}`}
+                      aria-label={`Question ${question.position}, ${question.categoryName}${isAnswered ? ", answered" : ", unanswered"}${isCurrentQuestion ? ", current" : ""}`}
+                      title={`Question ${question.position} · ${question.categoryName}`}
                       className={`h-4 w-4 rounded-[0.25rem] border transition-transform duration-150 hover:scale-105 ${
                         isCurrentQuestion
                           ? isAnswered
@@ -373,53 +554,74 @@ export function TestExperience({
                   : "translate-x-4 opacity-0"
               }`}
             >
-              <div className="flex flex-col gap-6 p-6">
-                <div>
-                  <h3 className="text-xl font-bold text-gray-900 sm:text-2xl">
-                    {activeQuestion.questionText}
-                  </h3>
-                </div>
-
-                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                  {activeQuestion.options.map((option) => {
-                    const checked = answers[activeQuestion.questionId] === option;
-
-                    return (
-                      <label
-                        key={option}
-                        className={`flex cursor-pointer items-start gap-3 rounded-3xl border px-4 py-4 transition-all duration-200 hover:scale-[1.01] hover:border-(--color-indigo)/30 ${
-                          checked
-                            ? "border-(--color-indigo) bg-(--color-indigo-light)"
-                            : "border-gray-300 bg-white"
-                        }`}
-                      >
-                        <input
-                          type="radio"
-                          name={`choice-${activeQuestion.questionId}`}
-                          value={option}
-                          checked={checked}
-                          onChange={() =>
-                            handleAnswerChange(activeQuestion.questionId, option)
-                          }
-                          className="mt-1 h-4 w-4 accent-(--color-indigo)"
-                        />
-                        <span className="text-sm leading-7 text-gray-900">
-                          {option}
+              <div className="flex flex-col gap-6 p-6 lg:px-8 lg:py-8">
+                <div ref={questionContentRef} className="flex w-full flex-col gap-6">
+                  <div>
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="status-pill bg-gray-100 text-gray-700">
+                          {activeQuestion.categoryName}
                         </span>
-                      </label>
-                    );
-                  })}
+                        <span className="status-pill bg-(--color-indigo-light) text-(--color-indigo)">
+                          {activeQuestion.type === "true_false"
+                            ? "True / False"
+                            : "Multiple choice"}
+                        </span>
+                      </div>
+                      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-500">
+                        Question {activeQuestion.position} out of {questions.length}
+                      </p>
+                    </div>
+                    <h3 className="mt-3 text-xl font-bold text-gray-900 sm:text-2xl">
+                      {activeQuestion.questionText}
+                    </h3>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                    {activeQuestionOptions.map((option) => {
+                      const checked =
+                        answers[activeQuestion.questionId] === option;
+
+                      return (
+                        <label
+                          key={option}
+                          className={`flex cursor-pointer items-start gap-3 rounded-3xl border px-4 py-4 transition-all duration-200 hover:scale-[1.01] hover:border-(--color-indigo)/30 ${
+                            checked
+                              ? "border-(--color-indigo) bg-(--color-indigo-light)"
+                              : "border-gray-300 bg-white"
+                          }`}
+                        >
+                          <input
+                            type="radio"
+                            name={`choice-${activeQuestion.questionId}`}
+                            value={option}
+                            checked={checked}
+                            onChange={() =>
+                              handleAnswerChange(
+                                activeQuestion.questionId,
+                                option,
+                              )
+                            }
+                            className="mt-1 h-4 w-4 accent-(--color-indigo)"
+                          />
+                          <span className="text-sm leading-7 text-gray-900">
+                            {option}
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
                 </div>
 
-                <div className="flex flex-col gap-4 border-t border-[rgba(196,196,216,0.5)] pt-4 lg:flex-row lg:items-end lg:justify-between">
-                  <div className="w-full max-w-sm">
-                    <label
-                      htmlFor="question-jump"
-                      className="text-xs font-semibold uppercase tracking-[0.2em] text-gray-500"
-                    >
+                <div className="flex flex-col items-center gap-4 border-t border-[rgba(196,196,216,0.5)] pt-4">
+                  <div className="mx-auto w-full max-w-sm">
+                    <p className="text-center text-xs font-semibold uppercase tracking-[0.2em] text-gray-500">
+                      Jump to question
+                    </p>
+                    <label htmlFor="question-jump" className="sr-only">
                       Jump to question
                     </label>
-                    <div className="mt-2 flex items-center gap-3">
+                    <div className="mt-2 flex items-center justify-center gap-3">
                       <input
                         id="question-jump"
                         type="number"
@@ -440,7 +642,7 @@ export function TestExperience({
                           }
                         }}
                         placeholder={`1-${highestQuestionNumber}`}
-                        className="w-full rounded-2xl border border-gray-300 bg-white px-4 py-3 text-sm text-gray-900 outline-none transition focus:border-(--color-indigo)"
+                        className="w-24 rounded-2xl border border-gray-300 bg-white px-4 py-3 text-center text-sm text-gray-900 outline-none transition focus:border-(--color-indigo)"
                       />
                       <button
                         type="button"
@@ -450,30 +652,10 @@ export function TestExperience({
                         Go
                       </button>
                     </div>
-                    <p className="mt-2 text-xs text-gray-600">
+                    <p className="mt-2 text-center text-xs text-gray-600">
                       {jumpError ||
                         `Type a question number from 1 to ${highestQuestionNumber}.`}
                     </p>
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-3">
-                    <button
-                      type="button"
-                      onClick={() => setActiveQuestion(activeQuestionIndex - 1)}
-                      disabled={activeQuestionIndex === 0}
-                      className="secondary-button px-5 py-3 text-sm disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      Previous
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setActiveQuestion(activeQuestionIndex + 1)}
-                      disabled={isLastQuestion}
-                      className="primary-button px-5 py-3 text-sm disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      Next question
-                    </button>
                   </div>
                 </div>
               </div>
