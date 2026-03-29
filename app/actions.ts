@@ -11,7 +11,9 @@ import {
 import { createClient } from "@/utils/supabase/server";
 import { createSessionForUser } from "@/utils/test-sessions";
 
-type AdminSupabaseClient = Awaited<ReturnType<typeof requireAdminContext>>["supabase"];
+type AdminSupabaseClient = Awaited<
+  ReturnType<typeof requireAdminContext>
+>["supabase"];
 
 function asString(formData: FormData, key: string) {
   const value = formData.get(key);
@@ -37,6 +39,20 @@ function asStringList(formData: FormData, key: string) {
         .filter(Boolean),
     ),
   );
+}
+
+function getErrorMessage(error: unknown, fallback: string) {
+  if (
+    error &&
+    typeof error === "object" &&
+    "message" in error &&
+    typeof error.message === "string" &&
+    error.message.trim()
+  ) {
+    return error.message;
+  }
+
+  return fallback;
 }
 
 function withFlash(
@@ -86,7 +102,9 @@ function withQuestionLibraryState(params: {
 }
 
 function getQuestionOptionInputs(formData: FormData) {
-  return Array.from({ length: 4 }, (_, index) => asString(formData, `option${index}`));
+  return Array.from({ length: 4 }, (_, index) =>
+    asString(formData, `option${index}`),
+  );
 }
 
 function normalizeCategoryName(value: string) {
@@ -100,13 +118,16 @@ function parseQuestionInput(formData: FormData) {
       ? getQuestionOptionInputs(formData).slice(0, 2)
       : getQuestionOptionInputs(formData);
   const selectedCorrectOptionIndex = asString(formData, "correctOptionIndex");
-  const parsedCorrectOptionIndex = Number.parseInt(selectedCorrectOptionIndex, 10);
+  const parsedCorrectOptionIndex = Number.parseInt(
+    selectedCorrectOptionIndex,
+    10,
+  );
   const hasValidCorrectOptionIndex =
     Number.isInteger(parsedCorrectOptionIndex) &&
     parsedCorrectOptionIndex >= 0 &&
     parsedCorrectOptionIndex < optionInputs.length;
   const correctAnswer = hasValidCorrectOptionIndex
-    ? optionInputs[parsedCorrectOptionIndex] ?? ""
+    ? (optionInputs[parsedCorrectOptionIndex] ?? "")
     : "";
 
   return {
@@ -121,7 +142,9 @@ function parseQuestionInput(formData: FormData) {
   };
 }
 
-function getQuestionValidationError(input: ReturnType<typeof parseQuestionInput>) {
+function getQuestionValidationError(
+  input: ReturnType<typeof parseQuestionInput>,
+) {
   if (!input.categoryName || !input.questionText) {
     return "Enter a category and the question text.";
   }
@@ -161,7 +184,9 @@ async function resolveQuestionCategoryId(
   }
 
   const existingCategory = (categories ?? []).find(
-    (category) => normalizeCategoryName(category.name).toLowerCase() === normalizedCategoryName.toLowerCase(),
+    (category) =>
+      normalizeCategoryName(category.name).toLowerCase() ===
+      normalizedCategoryName.toLowerCase(),
   );
 
   if (existingCategory) {
@@ -235,7 +260,7 @@ async function syncTestQuestions(
 export async function signOutAction() {
   const supabase = await createClient();
   await supabase.auth.signOut();
-  redirect(withFlash("/sign-in", { message: "You have been signed out." }));
+  redirect(withFlash("/", { message: "You have been signed out." }));
 }
 
 export async function startTestSessionAction(formData: FormData) {
@@ -249,7 +274,9 @@ export async function startTestSessionAction(formData: FormData) {
 
       destination = result.sessionId
         ? `/test/${result.sessionId}`
-        : withFlash("/", { error: result.error ?? "The test could not be started." });
+        : withFlash("/", {
+            error: result.error ?? "The test could not be started.",
+          });
     } catch (error) {
       console.error("Unable to create a test session.", {
         error,
@@ -267,8 +294,8 @@ export async function startTestSessionAction(formData: FormData) {
 }
 
 export async function createTestAction(formData: FormData) {
-  const { supabase } = await requireAdminContext("/admin/tests");
-  let destination = withFlash("/admin/tests", {
+  const { supabase } = await requireAdminContext("/admin/tests/new");
+  let destination = withFlash("/admin/tests/new", {
     error: "The test could not be created.",
   });
 
@@ -279,7 +306,9 @@ export async function createTestAction(formData: FormData) {
     const questionIds = asStringList(formData, "questionIds");
 
     if (!title) {
-      destination = withFlash("/admin/tests", { error: "A title is required." });
+      destination = withFlash("/admin/tests/new", {
+        error: "A title is required.",
+      });
     } else {
       const { data: createdTest, error } = await supabase
         .from("tests")
@@ -293,33 +322,44 @@ export async function createTestAction(formData: FormData) {
         .maybeSingle<{ id: string; title: string }>();
 
       if (error) {
-        destination = withFlash("/admin/tests", { error: error.message });
+        destination = withFlash("/admin/tests/new", { error: error.message });
       } else if (!createdTest) {
-        destination = withFlash("/admin/tests", {
+        destination = withFlash("/admin/tests/new", {
           error: "The test could not be created.",
         });
       } else {
-        await syncTestQuestions(supabase, createdTest.id, questionIds);
-        destination = withFlash("/admin/tests", {
-          message: `Created "${createdTest.title}".`,
-        });
+        try {
+          await syncTestQuestions(supabase, createdTest.id, questionIds);
+          destination = withFlash(`/admin/tests/${createdTest.id}`, {
+            message: `Created "${createdTest.title}".`,
+          });
+        } catch (error) {
+          destination = withFlash(`/admin/tests/${createdTest.id}`, {
+            error: getErrorMessage(
+              error,
+              "The test was created, but the selected questions could not be saved.",
+            ),
+          });
+        }
       }
     }
-  } catch {
-    destination = withFlash("/admin/tests", {
-      error: "The test could not be created.",
+  } catch (error) {
+    destination = withFlash("/admin/tests/new", {
+      error: getErrorMessage(error, "The test could not be created."),
     });
   }
 
   revalidatePath("/admin");
   revalidatePath("/admin/tests");
+  revalidatePath("/admin/results");
   redirect(destination);
 }
 
 export async function updateTestAction(formData: FormData) {
-  const { supabase } = await requireAdminContext("/admin/tests");
   const testId = asString(formData, "testId");
-  let destination = withFlash("/admin/tests", {
+  const detailPath = testId ? `/admin/tests/${testId}` : "/admin/tests";
+  const { supabase } = await requireAdminContext(detailPath);
+  let destination = withFlash(detailPath, {
     error: "The test could not be updated.",
   });
 
@@ -330,31 +370,48 @@ export async function updateTestAction(formData: FormData) {
       const questionsPerAttempt = asInt(formData, "questionsPerAttempt", 30);
       const questionIds = asStringList(formData, "questionIds");
 
-      const { error } = await supabase
-        .from("tests")
-        .update({
-          title,
-          time_limit_mins: Math.max(1, timeLimit),
-          questions_per_attempt: Math.max(1, questionsPerAttempt),
-          is_active: asBoolean(formData, "isActive"),
-        })
-        .eq("id", testId);
-
-      if (error) {
-        destination = withFlash("/admin/tests", { error: error.message });
+      if (!title) {
+        destination = withFlash(detailPath, { error: "A title is required." });
       } else {
-        await syncTestQuestions(supabase, testId, questionIds);
-        destination = withFlash("/admin/tests", { message: `Saved "${title}".` });
+        const { error } = await supabase
+          .from("tests")
+          .update({
+            title,
+            time_limit_mins: Math.max(1, timeLimit),
+            questions_per_attempt: Math.max(1, questionsPerAttempt),
+            is_active: asBoolean(formData, "isActive"),
+          })
+          .eq("id", testId);
+
+        if (error) {
+          destination = withFlash(detailPath, { error: error.message });
+        } else {
+          try {
+            await syncTestQuestions(supabase, testId, questionIds);
+            destination = withFlash(detailPath, {
+              message: `Saved "${title}".`,
+            });
+          } catch (error) {
+            destination = withFlash(detailPath, {
+              error: getErrorMessage(
+                error,
+                "The test settings were saved, but the selected questions could not be updated.",
+              ),
+            });
+          }
+        }
       }
-    } catch {
-      destination = withFlash("/admin/tests", {
-        error: "The test could not be updated.",
+    } catch (error) {
+      destination = withFlash(detailPath, {
+        error: getErrorMessage(error, "The test could not be updated."),
       });
     }
   }
 
   revalidatePath("/admin");
   revalidatePath("/admin/tests");
+  revalidatePath(detailPath);
+  revalidatePath("/admin/results");
   redirect(destination);
 }
 
@@ -372,7 +429,9 @@ export async function createQuestionCategoryAction(formData: FormData) {
         error: "Enter a category name.",
       });
     } else {
-      const { error } = await supabase.from("question_categories").insert({ name });
+      const { error } = await supabase
+        .from("question_categories")
+        .insert({ name });
 
       destination = error
         ? withFlash("/admin/questions", { error: error.message })
@@ -406,7 +465,10 @@ export async function createQuestionAction(formData: FormData) {
         error: validationError,
       });
     } else {
-      const categoryId = await resolveQuestionCategoryId(supabase, input.categoryName);
+      const categoryId = await resolveQuestionCategoryId(
+        supabase,
+        input.categoryName,
+      );
       const { data: createdQuestion, error } = await supabase
         .from("questions")
         .insert({
@@ -468,7 +530,10 @@ export async function updateQuestionAction(formData: FormData) {
           questionId,
         });
       } else {
-        const categoryId = await resolveQuestionCategoryId(supabase, input.categoryName);
+        const categoryId = await resolveQuestionCategoryId(
+          supabase,
+          input.categoryName,
+        );
         const { error } = await supabase
           .from("questions")
           .update({
@@ -512,7 +577,10 @@ export async function deleteQuestionAction(formData: FormData) {
 
   if (questionId) {
     try {
-      const { error } = await supabase.from("questions").delete().eq("id", questionId);
+      const { error } = await supabase
+        .from("questions")
+        .delete()
+        .eq("id", questionId);
 
       destination = error
         ? withQuestionLibraryState({ error: error.message, questionId })
@@ -540,7 +608,10 @@ export async function grantRetakeAction(formData: FormData) {
 
   if (sessionId) {
     try {
-      const retakesRemaining = Math.max(0, asInt(formData, "retakesRemaining", 0));
+      const retakesRemaining = Math.max(
+        0,
+        asInt(formData, "retakesRemaining", 0),
+      );
       const { error } = await supabase
         .from("test_sessions")
         .update({

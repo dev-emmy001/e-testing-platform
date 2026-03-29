@@ -502,12 +502,12 @@ export async function createSessionForUser(userId: string, testId: string) {
     0,
     Math.min(test.questions_per_attempt, questionIds.length),
   );
-  const selectedQuestions = await getQuestionsByIds(admin, selectedQuestionIds);
+  const linkedQuestions = await getQuestionsByIds(admin, selectedQuestionIds);
   const selectedQuestionsById = new Map(
-    selectedQuestions.map((question) => [question.id, question]),
+    linkedQuestions.map((question) => [question.id, question]),
   );
 
-  if (selectedQuestions.length !== selectedQuestionIds.length) {
+  if (linkedQuestions.length !== selectedQuestionIds.length) {
     return { error: "This test is being updated right now. Start it again in a moment." };
   }
 
