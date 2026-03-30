@@ -19,6 +19,7 @@ export default async function ProfilePage() {
   const dashboardPath = getDashboardPathForRole(profile?.role);
   const prefilledName = normalizeProfileText(profile?.name);
   const prefilledTrack = normalizeProfileText(profile?.track);
+  const prefilledSuccessStory = normalizeProfileText(profile?.success_story);
 
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-5xl items-center px-6 py-12 lg:px-8">
@@ -111,6 +112,23 @@ export default async function ProfilePage() {
                 defaultValue={prefilledTrack}
                 placeholder="Frontend Development"
                 className="field-shell w-full px-4 py-3 text-base outline-none ring-0 transition focus:border-[color:var(--color-indigo)]"
+              />
+            </div>
+
+            <div className="grid gap-2">
+              <label
+                htmlFor="successStory"
+                className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-500"
+              >
+                Success Story
+              </label>
+              <textarea
+                id="successStory"
+                name="successStory"
+                required
+                defaultValue={prefilledSuccessStory}
+                placeholder="Share your experience and what you learned..."
+                className="field-shell w-full min-h-[120px] resize-y px-4 py-3 text-base outline-none ring-0 transition focus:border-[color:var(--color-indigo)]"
               />
             </div>
 

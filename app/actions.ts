@@ -66,6 +66,7 @@ function getProfileInput(formData: FormData) {
   return {
     name: normalizeProfileText(asString(formData, "name")),
     track: normalizeProfileText(asString(formData, "track")),
+    successStory: normalizeProfileText(asString(formData, "successStory")),
   };
 }
 
@@ -75,8 +76,8 @@ function getProfileValidationError(
 ) {
   const continuation = mode === "complete" ? "before you continue" : "before you save";
 
-  if (!input.name && !input.track) {
-    return `Enter your name and track ${continuation}.`;
+  if (!input.name && !input.track && !input.successStory) {
+    return `Enter your name, track, and success story ${continuation}.`;
   }
 
   if (!input.name) {
@@ -87,6 +88,10 @@ function getProfileValidationError(
     return `Enter your track ${continuation}.`;
   }
 
+  if (!input.successStory) {
+    return `Enter your success story ${continuation}.`;
+  }
+
   return null;
 }
 
@@ -94,6 +99,7 @@ async function saveProfileForCurrentUser(params: {
   name: string;
   profile: Awaited<ReturnType<typeof requireUserContext>>["profile"];
   track: string;
+  successStory: string;
   user: Awaited<ReturnType<typeof requireUserContext>>["user"];
 }) {
   const email = params.user.email?.trim() || params.profile?.email?.trim();
@@ -110,6 +116,7 @@ async function saveProfileForCurrentUser(params: {
       name: params.name,
       role: params.profile?.role ?? "trainee",
       track: params.track,
+      success_story: params.successStory,
     },
     { onConflict: "id" },
   );
@@ -457,6 +464,7 @@ export async function completeOnboardingAction(formData: FormData) {
         name: input.name,
         profile,
         track: input.track,
+        successStory: input.successStory,
         user,
       });
       destination = withFlash(getPostAuthRedirectPath(nextPath, profile?.role), {
@@ -493,6 +501,7 @@ export async function updateProfileAction(formData: FormData) {
         name: input.name,
         profile,
         track: input.track,
+        successStory: input.successStory,
         user,
       });
       destination = withFlash("/profile", {
