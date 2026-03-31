@@ -15,6 +15,7 @@ type TraineeProfile = {
   name: string | null;
   role: string;
   track: string | null;
+  location: string | null;
 };
 
 function buildTraineeSession(
@@ -116,6 +117,7 @@ function buildTraineeRecords(
       ).length,
       role: trainee.role,
       track: getProfileTrack(trainee),
+      location: trainee.location,
       totalAttempts: allSessions.length,
     };
   }).sort((left, right) => {
@@ -145,7 +147,7 @@ export default async function AdminTraineesPage() {
     await Promise.all([
       supabase
         .from("profiles")
-        .select("id, email, name, role, track")
+        .select("id, email, name, role, track, location")
         .eq("role", "trainee")
         .order("email", { ascending: true })
         .returns<TraineeProfile[]>(),

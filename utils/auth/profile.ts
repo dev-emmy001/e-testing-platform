@@ -9,6 +9,7 @@ export type ProfileRecord = {
   track: string | null;
   success_story: string | null;
   created_at: string | null;
+  location: string | null;
 };
 
 function normalizeEmail(email: string | null | undefined) {
@@ -21,7 +22,7 @@ async function readProfileById(
 ): Promise<ProfileRecord | null> {
   const { data } = await supabase
     .from("profiles")
-    .select("id, email, name, role, track, success_story, created_at")
+    .select("id, email, name, role, track, success_story, created_at, location")
     .eq("id", userId)
     .maybeSingle<ProfileRecord>();
 
@@ -81,10 +82,11 @@ async function repairProfileForUser(user: User): Promise<ProfileRecord | null> {
         role: profileByEmail?.role ?? "trainee",
         track: profileByEmail?.track ?? null,
         success_story: profileByEmail?.success_story ?? null,
+        location: profileByEmail?.location ?? null,
       },
       { onConflict: "id" },
     )
-    .select("id, email, name, role, track, success_story, created_at")
+    .select("id, email, name, role, track, success_story, created_at, location")
     .maybeSingle<ProfileRecord>();
 
   return (
@@ -96,6 +98,7 @@ async function repairProfileForUser(user: User): Promise<ProfileRecord | null> {
       track: profileByEmail?.track ?? null,
       success_story: profileByEmail?.success_story ?? null,
       created_at: profileByEmail?.created_at ?? null,
+      location: profileByEmail?.location ?? null,
     }
   );
 }

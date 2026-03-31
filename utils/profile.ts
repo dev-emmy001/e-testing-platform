@@ -3,6 +3,7 @@ type ProfileIdentity = {
   name?: string | null;
   track?: string | null;
   success_story?: string | null;
+  location?: string | null;
 };
 
 export function normalizeProfileText(value: string | null | undefined) {
@@ -38,6 +39,7 @@ export function isProfileComplete(
   return Boolean(
     normalizeProfileText(profile?.name) &&
       normalizeProfileText(profile?.track) &&
-      normalizeProfileText(profile?.success_story),
+      normalizeProfileText(profile?.success_story) &&
+      normalizeProfileText(profile?.location),
   );
 }

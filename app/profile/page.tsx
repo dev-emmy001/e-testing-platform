@@ -19,6 +19,7 @@ export default async function ProfilePage() {
   const dashboardPath = getDashboardPathForRole(profile?.role);
   const prefilledName = normalizeProfileText(profile?.name);
   const prefilledTrack = normalizeProfileText(profile?.track);
+  const prefilledLocation = normalizeProfileText(profile?.location);
   const prefilledSuccessStory = normalizeProfileText(profile?.success_story);
 
   return (
@@ -71,7 +72,7 @@ export default async function ProfilePage() {
             </div>
 
             <div className="rounded-3xl border border-[color:var(--color-cyan)]/30 bg-[color:var(--color-cyan)]/10 px-5 py-5 text-sm leading-7 text-gray-700">
-              Your email is managed by Supabase sign-in. This page updates the
+              This page updates the
               profile details the platform uses for greetings, cohort grouping,
               and admin reporting.
             </div>
@@ -111,6 +112,24 @@ export default async function ProfilePage() {
                 required
                 defaultValue={prefilledTrack}
                 placeholder="Frontend Development"
+                className="field-shell w-full px-4 py-3 text-base outline-none ring-0 transition focus:border-[color:var(--color-indigo)]"
+              />
+            </div>
+
+            <div className="grid gap-2">
+              <label
+                htmlFor="location"
+                className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-500"
+              >
+                Training Location
+              </label>
+              <input
+                id="location"
+                name="location"
+                type="text"
+                required
+                defaultValue={prefilledLocation}
+                placeholder="IGHub Aba / IGHub Umuahia"
                 className="field-shell w-full px-4 py-3 text-base outline-none ring-0 transition focus:border-[color:var(--color-indigo)]"
               />
             </div>

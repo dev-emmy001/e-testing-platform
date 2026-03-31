@@ -67,6 +67,7 @@ function getProfileInput(formData: FormData) {
     name: normalizeProfileText(asString(formData, "name")),
     track: normalizeProfileText(asString(formData, "track")),
     successStory: normalizeProfileText(asString(formData, "successStory")),
+    location: normalizeProfileText(asString(formData, "location")),
   };
 }
 
@@ -76,8 +77,8 @@ function getProfileValidationError(
 ) {
   const continuation = mode === "complete" ? "before you continue" : "before you save";
 
-  if (!input.name && !input.track && !input.successStory) {
-    return `Enter your name, track, and success story ${continuation}.`;
+  if (!input.name && !input.track && !input.successStory && !input.location) {
+    return `Enter your name, track, success story, and location ${continuation}.`;
   }
 
   if (!input.name) {
@@ -86,6 +87,10 @@ function getProfileValidationError(
 
   if (!input.track) {
     return `Enter your track ${continuation}.`;
+  }
+
+  if (!input.location) {
+    return `Enter your location ${continuation}.`;
   }
 
   if (!input.successStory) {
@@ -100,6 +105,7 @@ async function saveProfileForCurrentUser(params: {
   profile: Awaited<ReturnType<typeof requireUserContext>>["profile"];
   track: string;
   successStory: string;
+  location: string;
   user: Awaited<ReturnType<typeof requireUserContext>>["user"];
 }) {
   const email = params.user.email?.trim() || params.profile?.email?.trim();
@@ -117,6 +123,7 @@ async function saveProfileForCurrentUser(params: {
       role: params.profile?.role ?? "trainee",
       track: params.track,
       success_story: params.successStory,
+      location: params.location,
     },
     { onConflict: "id" },
   );
@@ -464,6 +471,7 @@ export async function completeOnboardingAction(formData: FormData) {
         name: input.name,
         profile,
         track: input.track,
+        location: input.location,
         successStory: input.successStory,
         user,
       });
@@ -501,6 +509,7 @@ export async function updateProfileAction(formData: FormData) {
         name: input.name,
         profile,
         track: input.track,
+        location: input.location,
         successStory: input.successStory,
         user,
       });

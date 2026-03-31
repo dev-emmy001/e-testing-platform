@@ -45,6 +45,7 @@ export type AdminTraineeRecord = {
   resultCapturedAfterExpiryCount: number;
   role: string;
   track: string | null;
+  location: string | null;
   totalAttempts: number;
 };
 
@@ -89,6 +90,7 @@ function getSessionSearchText(trainee: AdminTraineeRecord) {
     trainee.id,
     trainee.role,
     trainee.track ?? "",
+    trainee.location ?? "",
     ...trainee.latestSessions.map((session) => session.testTitle),
   ]
     .join(" ")
@@ -96,7 +98,7 @@ function getSessionSearchText(trainee: AdminTraineeRecord) {
 }
 
 function getTraineeMetaLine(trainee: AdminTraineeRecord) {
-  return [trainee.track, trainee.email].filter(Boolean).join(" · ");
+  return [trainee.track, trainee.location, trainee.email].filter(Boolean).join(" · ");
 }
 
 function ViewToggleButton({
@@ -393,6 +395,14 @@ function TraineeDetailDrawer({
                 </div>
                 <div>
                   <dt className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
+                    Location
+                  </dt>
+                  <dd className="mt-2 text-sm text-gray-900">
+                    {trainee.location ?? "—"}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
                     Email
                   </dt>
                   <dd className="mt-2 break-all text-sm text-gray-900">
@@ -680,6 +690,7 @@ export function AdminTraineesDashboard({
 }: AdminTraineesDashboardProps) {
   const [viewMode, setViewMode] = useState<ViewMode>("grid");
   const [searchQuery, setSearchQuery] = useState("");
+  const [sortBy, setSortBy] = useState<"name" | "track" | "location" | "email">("name");
   const [selectedTraineeId, setSelectedTraineeId] = useState<string | null>(
     null,
   );
@@ -703,7 +714,22 @@ export function AdminTraineesDashboard({
     ? trainees.filter((trainee) =>
         getSessionSearchText(trainee).includes(normalizedQuery),
       )
-    : trainees;
+    : [...trainees];
+
+  filteredTrainees.sort((a, b) => {
+    switch (sortBy) {
+      case "track":
+        return (a.track ?? "").localeCompare(b.track ?? "");
+      case "location":
+        return (a.location ?? "").localeCompare(b.location ?? "");
+      case "email":
+        return a.email.localeCompare(b.email);
+      case "name":
+      default:
+        return a.displayName.localeCompare(b.displayName);
+    }
+  });
+
   const totalPages = Math.max(1, Math.ceil(filteredTrainees.length / pageSize));
   const activePage = Math.min(currentPage, totalPages);
   const selectedTrainee =
@@ -779,7 +805,25 @@ export function AdminTraineesDashboard({
             </div>
           </div>
 
-          <div className="flex flex-col gap-3 xl:justify-end">
+          <div className="flex flex-col gap-3 xl:justify-end xl:flex-row xl:items-center">
+            <div className="flex items-center gap-2">
+              <label htmlFor="sort-by" className="text-sm font-semibold text-gray-700">Sort by:</label>
+              <select
+                id="sort-by"
+                value={sortBy}
+                onChange={(e) => {
+                  setSortBy(e.target.value as any);
+                  setCurrentPage(1);
+                }}
+                className="field-shell rounded-[1.25rem] px-3 py-1.5 text-sm outline-none"
+              >
+                <option value="name">Name</option>
+                <option value="location">Location</option>
+                <option value="track">Track</option>
+                <option value="email">Email</option>
+              </select>
+            </div>
+
             <div className="rounded-[1.25rem] bg-gray-100 p-1">
               <ViewToggleButton
                 active={viewMode === "grid"}
