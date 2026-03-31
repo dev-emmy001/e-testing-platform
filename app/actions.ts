@@ -974,3 +974,47 @@ export async function reportFocusLossAction(sessionId: string) {
     return { error: "Failed to record focus loss.", count: 0 };
   }
 }
+
+export async function incrementRetakeAction(formData: FormData) {
+  const { supabase } = await requireAdminContext("/admin/results");
+  const sessionId = asString(formData, "sessionId");
+
+  let destination = withFlash("/admin/results", {
+    error: "The retake allowance could not be updated.",
+  });
+
+  if (sessionId) {
+    try {
+      const { data: session, error: fetchError } = await supabase
+        .from("test_sessions")
+        .select("retakes_remaining")
+        .eq("id", sessionId)
+        .single();
+
+      if (fetchError || !session) {
+        destination = withFlash("/admin/results", { error: "Failed to locate session." });
+      } else {
+        const newRetakes = session.retakes_remaining + 1;
+        const { error: updateError } = await supabase
+          .from("test_sessions")
+          .update({ retakes_remaining: newRetakes })
+          .eq("id", sessionId);
+
+        if (updateError) {
+          destination = withFlash("/admin/results", { error: "Failed to grant retake." });
+        } else {
+          destination = withFlash("/admin/results", { message: "Granted 1 extra retake." });
+        }
+      }
+    } catch {
+      destination = withFlash("/admin/results", {
+        error: "The retake allowance could not be updated.",
+      });
+    }
+  }
+
+  revalidatePath("/");
+  revalidatePath("/admin/results");
+  revalidatePath("/admin");
+  await redirectWithDestination(destination);
+}

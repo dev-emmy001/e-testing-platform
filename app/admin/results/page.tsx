@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { incrementRetakeAction } from "@/app/actions";
 import { FlashToast } from "@/components/flash-toast";
 import { requireAdminContext } from "@/utils/auth/session";
 import { readFlash } from "@/utils/flash";
@@ -113,6 +114,7 @@ export default async function AdminResultsPage() {
                 <th className="px-3 py-2">Attempt</th>
                 <th className="px-3 py-2">Focus Lost</th>
                 <th className="px-3 py-2">Submitted</th>
+                <th className="px-3 py-2">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -157,8 +159,29 @@ export default async function AdminResultsPage() {
                         <span className="text-gray-400">0</span>
                       )}
                     </td>
-                    <td className="rounded-r-[1.5rem] px-3 py-4">
+                    <td className="px-3 py-4">
                       {formatDateTime(session.submitted_at ?? session.started_at)}
+                    </td>
+                    <td className="rounded-r-[1.5rem] px-3 py-4">
+                      {session.status !== "in_progress" ? (
+                        <form action={incrementRetakeAction}>
+                          <input type="hidden" name="sessionId" value={session.id} />
+                          <button
+                            type="submit"
+                            title="Grant exactly 1 extra attempt"
+                            className="secondary-button text-xs px-3 py-1.5 inline-flex items-center gap-2 border border-gray-300"
+                          >
+                            Grant Retake
+                            {session.retakes_remaining > 0 ? (
+                              <span className="rounded-full bg-(--color-indigo-light) px-1.5 py-0.5 text-[0.65rem] font-bold text-(--color-indigo)">
+                                {session.retakes_remaining}
+                              </span>
+                            ) : null}
+                          </button>
+                        </form>
+                      ) : (
+                        <span className="text-xs text-gray-500">In Progress</span>
+                      )}
                     </td>
                   </tr>
                 );
