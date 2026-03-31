@@ -153,7 +153,7 @@ export default async function AdminOverviewPage() {
     supabase
       .from("test_sessions")
       .select(
-        "id, test_id, trainee_id, started_at, expires_at, submitted_at, status, score, total_questions, attempt_number, retakes_remaining",
+        "id, test_id, trainee_id, started_at, expires_at, submitted_at, status, score, total_questions, attempt_number, retakes_remaining, focus_loss_count",
       )
       .order("started_at", { ascending: false })
       .returns<SessionRecord[]>(),
@@ -482,6 +482,11 @@ export default async function AdminOverviewPage() {
                             session.total_questions,
                           )}
                         </span>
+                        {session.focus_loss_count > 0 ? (
+                          <span className="status-pill bg-red-100 text-red-700 font-semibold border border-red-200">
+                            {session.focus_loss_count} infraction{session.focus_loss_count === 1 ? "" : "s"} lost
+                          </span>
+                        ) : null}
                       </div>
                     </div>
 

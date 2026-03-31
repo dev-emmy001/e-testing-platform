@@ -30,7 +30,7 @@ export default async function AdminResultsPage() {
     supabase
       .from("test_sessions")
       .select(
-        "id, test_id, trainee_id, started_at, expires_at, submitted_at, status, score, total_questions, attempt_number, retakes_remaining",
+        "id, test_id, trainee_id, started_at, expires_at, submitted_at, status, score, total_questions, attempt_number, retakes_remaining, focus_loss_count",
       )
       .order("started_at", { ascending: false })
       .returns<SessionRecord[]>(),
@@ -111,6 +111,7 @@ export default async function AdminResultsPage() {
                 <th className="px-3 py-2">Status</th>
                 <th className="px-3 py-2">Score</th>
                 <th className="px-3 py-2">Attempt</th>
+                <th className="px-3 py-2">Focus Lost</th>
                 <th className="px-3 py-2">Submitted</th>
               </tr>
             </thead>
@@ -147,6 +148,15 @@ export default async function AdminResultsPage() {
                       {formatPercentage(session.score, session.total_questions)})
                     </td>
                     <td className="px-3 py-4">{session.attempt_number}</td>
+                    <td className="px-3 py-4">
+                      {session.focus_loss_count > 0 ? (
+                        <span className="font-semibold text-red-600">
+                          {session.focus_loss_count}
+                        </span>
+                      ) : (
+                        <span className="text-gray-400">0</span>
+                      )}
+                    </td>
                     <td className="rounded-r-[1.5rem] px-3 py-4">
                       {formatDateTime(session.submitted_at ?? session.started_at)}
                     </td>
