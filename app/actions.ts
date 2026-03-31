@@ -16,7 +16,7 @@ import {
 } from "@/utils/question-library";
 import { createAdminClient } from "@/utils/supabase/admin";
 import { createClient } from "@/utils/supabase/server";
-import { createSessionForUser } from "@/utils/test-sessions";
+import { createSessionForUser, incrementFocusLossCount } from "@/utils/test-sessions";
 
 type AdminSupabaseClient = Awaited<
   ReturnType<typeof requireAdminContext>
@@ -962,4 +962,15 @@ export async function deleteTraineeAction(formData: FormData) {
   revalidatePath("/admin/results");
   revalidatePath("/admin/tests");
   await redirectWithDestination(destination);
+}
+
+export async function reportFocusLossAction(sessionId: string) {
+  const { user } = await requireUserContext("/");
+  try {
+    const result = await incrementFocusLossCount(sessionId);
+    return result;
+  } catch (error) {
+    console.error("Failed to report focus loss:", error);
+    return { error: "Failed to record focus loss.", count: 0 };
+  }
 }

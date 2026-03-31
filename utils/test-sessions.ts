@@ -22,14 +22,16 @@ export type SessionRecord = {
   total_questions: number | null;
   attempt_number: number;
   retakes_remaining: number;
+  focus_loss_count: number;
 };
 
 type LegacySessionRecord = Omit<
   SessionRecord,
-  "attempt_number" | "retakes_remaining"
+  "attempt_number" | "retakes_remaining" | "focus_loss_count"
 > & {
   attempt_number?: number | null;
   retakes_remaining?: number | null;
+  focus_loss_count?: number | null;
 };
 
 type SessionQuestionRecord = {
@@ -97,7 +99,7 @@ export type SessionExperience = {
 
 const LEGACY_SESSION_SELECT =
   "id, test_id, trainee_id, started_at, expires_at, submitted_at, status, score, total_questions";
-const SESSION_SELECT = `${LEGACY_SESSION_SELECT}, attempt_number, retakes_remaining`;
+const SESSION_SELECT = `${LEGACY_SESSION_SELECT}, attempt_number, retakes_remaining, focus_loss_count`;
 
 function shuffle<T>(items: T[]) {
   const copy = [...items];
@@ -128,13 +130,14 @@ function dedupeAnswers(answers: AnswerRecord[]) {
 
 function normalizeSessionRecord(
   session: LegacySessionRecord,
-  defaults?: Partial<Pick<SessionRecord, "attempt_number" | "retakes_remaining">>,
+  defaults?: Partial<Pick<SessionRecord, "attempt_number" | "retakes_remaining" | "focus_loss_count">>,
 ): SessionRecord {
   return {
     ...session,
     attempt_number: session.attempt_number ?? defaults?.attempt_number ?? 1,
     retakes_remaining:
       session.retakes_remaining ?? defaults?.retakes_remaining ?? 0,
+    focus_loss_count: session.focus_loss_count ?? defaults?.focus_loss_count ?? 0,
   };
 }
 
@@ -180,7 +183,9 @@ async function getTestQuestionIds(admin: ReturnType<typeof createAdminClient>, t
     .map((row) => row.question_id)
     .filter(Boolean);
 
-  if (linkedQuestionIds.length) {
+  // If there was no error querying `test_questions`, return the result (even if empty)
+  // because it means the new schema is active.
+  if (!linkedQuestionsError) {
     return linkedQuestionIds;
   }
 
@@ -328,6 +333,7 @@ async function getSessionHistoryForUser(
     normalizeSessionRecord(session, {
       attempt_number: allSessions.length - index,
       retakes_remaining: 0,
+      focus_loss_count: 0,
     }),
   );
 
@@ -359,6 +365,7 @@ async function insertSessionRecord(
       expires_at: input.expiresAt,
       attempt_number: input.attemptNumber,
       retakes_remaining: input.retakesRemaining,
+      focus_loss_count: 0,
     })
     .select("id")
     .maybeSingle<{ id: string }>();
@@ -784,6 +791,27 @@ export async function finalizeSession(
     score,
     totalQuestions,
   };
+}
+
+export async function incrementFocusLossCount(sessionId: string) {
+  const admin = createAdminClient();
+  const session = await getSessionById(sessionId);
+
+  if (!session || session.status !== "in_progress") {
+    return { error: "Session is not active.", count: 0 };
+  }
+
+  const newCount = session.focus_loss_count + 1;
+  const { error } = await admin
+    .from("test_sessions")
+    .update({ focus_loss_count: newCount })
+    .eq("id", sessionId);
+
+  if (error) {
+    throw error;
+  }
+
+  return { count: newCount };
 }
 
 export async function loadSessionExperienceForUser(userId: string, sessionId: string) {

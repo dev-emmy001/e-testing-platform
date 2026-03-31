@@ -2,6 +2,7 @@
 
 import { useEffect, useEffectEvent, useRef, useState } from "react";
 import { formatCountdown } from "@/utils/format";
+import { reportFocusLossAction } from "@/app/actions";
 
 type ExperienceQuestion = {
   categoryName: string;
@@ -16,6 +17,7 @@ type ExperienceQuestion = {
 type TestExperienceProps = {
   expiresAt: string;
   optionShuffleSeed: string;
+  focusLossCount: number;
   questions: ExperienceQuestion[];
   sessionId: string;
   testTitle: string;
@@ -70,6 +72,7 @@ function shuffleQuestionOptions(
 export function TestExperience({
   expiresAt,
   optionShuffleSeed,
+  focusLossCount,
   questions,
   sessionId,
   testTitle,
@@ -107,6 +110,9 @@ export function TestExperience({
   const [jumpTarget, setJumpTarget] = useState("");
   const [jumpError, setJumpError] = useState("");
 
+  const [infractionLevel, setInfractionLevel] = useState(focusLossCount);
+  const [showWarning, setShowWarning] = useState(false);
+
   async function persistAnswer(questionId: string, selectedAnswer: string) {
     setSaveState("saving");
 
@@ -141,6 +147,29 @@ export function TestExperience({
     formRef.current?.requestSubmit();
   });
 
+  const handleFocusLossEvent = useEffectEvent(async () => {
+    if (showWarning || hasSubmittedRef.current || infractionLevel >= 3) return;
+
+    const newLevel = infractionLevel + 1;
+    setInfractionLevel(newLevel);
+
+    if (newLevel < 3) {
+      setShowWarning(true);
+    } else {
+      autoSubmit();
+    }
+
+    try {
+      const res = await reportFocusLossAction(sessionId);
+      if (res.count && res.count > newLevel) {
+        setInfractionLevel(res.count);
+        if (res.count >= 3 && !hasSubmittedRef.current) autoSubmit();
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  });
+
   useEffect(() => {
     const timer = window.setInterval(() => {
       const nextRemainingMs = new Date(expiresAt).getTime() - Date.now();
@@ -153,7 +182,40 @@ export function TestExperience({
     }, 1000);
 
     return () => window.clearInterval(timer);
-  }, [expiresAt]);
+  }, [expiresAt, autoSubmit]);
+
+  useEffect(() => {
+    let debounceTimer: number | null = null;
+    let isHandlingBlur = false;
+
+    function checkFocus() {
+      const isLost = document.visibilityState === "hidden" || !document.hasFocus();
+      if (isLost) {
+        if (!isHandlingBlur && !showWarning && !hasSubmittedRef.current) {
+          isHandlingBlur = true;
+          debounceTimer = window.setTimeout(() => {
+            handleFocusLossEvent();
+            isHandlingBlur = false;
+          }, 500);
+        }
+      } else {
+        if (debounceTimer) {
+          window.clearTimeout(debounceTimer);
+          debounceTimer = null;
+        }
+        isHandlingBlur = false;
+      }
+    }
+
+    document.addEventListener("visibilitychange", checkFocus);
+    window.addEventListener("blur", checkFocus);
+
+    return () => {
+      document.removeEventListener("visibilitychange", checkFocus);
+      window.removeEventListener("blur", checkFocus);
+      if (debounceTimer) window.clearTimeout(debounceTimer);
+    };
+  }, [showWarning, handleFocusLossEvent]);
 
   useEffect(() => {
     return () => {
@@ -393,7 +455,28 @@ export function TestExperience({
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 relative">
+      {showWarning ? (
+        <div className="fixed inset-0 z-100 flex items-center justify-center bg-gray-900/80 p-6 backdrop-blur-md">
+          <div className="surface-card w-full max-w-lg rounded-3xl p-8 text-center shadow-2xl">
+            <h3 className="text-2xl font-bold text-red-600">Focus Lost</h3>
+            <p className="mt-4 text-gray-700">
+              Please remain on this screen.
+              {infractionLevel === 1
+                ? " Further infractions will result in auto-submission."
+                : " This is your second warning. An infraction has been flagged. One more will result in automatic submission."}
+            </p>
+            <button
+              type="button"
+              onClick={() => setShowWarning(false)}
+              className="mt-6 primary-button w-full px-5 py-3 text-sm flex justify-center items-center"
+            >
+              I understand, resume exam
+            </button>
+          </div>
+        </div>
+      ) : null}
+
       {isFloatingTimerVisible ? (
         <div
           aria-hidden="true"
@@ -470,7 +553,7 @@ export function TestExperience({
         ref={formRef}
         action={`/api/test-sessions/${sessionId}/submit`}
         method="POST"
-        className="space-y-5"
+        className={`space-y-5 ${showWarning ? "blur-md pointer-events-none select-none transition-all duration-300" : ""}`}
         onSubmit={() => {
           hasSubmittedRef.current = true;
         }}

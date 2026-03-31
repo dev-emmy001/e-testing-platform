@@ -71,6 +71,7 @@ export default async function TestPage({ params }: TestPageProps) {
           testTitle={experience.test?.title ?? "Assessment"}
           expiresAt={experience.session.expires_at}
           optionShuffleSeed={optionShuffleSeed}
+          focusLossCount={experience.session.focus_loss_count}
           questions={experience.questions.map((question) => ({
             ...question,
             selectedAnswer: question.selectedAnswer,
