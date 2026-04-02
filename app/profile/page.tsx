@@ -139,14 +139,15 @@ export default async function ProfilePage() {
                 htmlFor="successStory"
                 className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-500"
               >
-                Success Story
+                Success Story (Minimum 100 words)
               </label>
               <textarea
                 id="successStory"
                 name="successStory"
                 required
+                minLength={100}
                 defaultValue={prefilledSuccessStory}
-                placeholder="Share your experience and what you learned..."
+                placeholder="How has your experience been so far in the training? did your learn something new?, did something feel off?. Respond in details"
                 className="field-shell w-full min-h-[120px] resize-y px-4 py-3 text-base outline-none ring-0 transition focus:border-[color:var(--color-indigo)]"
               />
             </div>

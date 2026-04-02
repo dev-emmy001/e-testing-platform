@@ -97,6 +97,10 @@ function getProfileValidationError(
     return `Enter your success story ${continuation}.`;
   }
 
+  if (input.successStory.length < 100) {
+    return `Your success story must be at least 100 characters ${continuation}.`;
+  }
+
   return null;
 }
 
